@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "yookassa": {
+      "command": "npx",
+      "args": ["-y", "@theyahia/yookassa-mcp"],
+      "env": {
+        "YOOKASSA_SHOP_ID": "<YOUR_SHOP_ID>",
+        "YOOKASSA_SECRET_KEY": "<YOUR_SECRET_KEY>"
+      }
+    }
+  }
+}
