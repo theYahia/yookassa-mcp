@@ -1,8 +1,6 @@
-import { YooKassaClient } from "../client.js";
-
-const client = new YooKassaClient();
+import { getClient } from "../client.js";
 
 export async function handleGetBalance(): Promise<string> {
-  const result = await client.get("/me");
+  const result = await getClient().get("/me");
   return JSON.stringify(result, null, 2);
 }

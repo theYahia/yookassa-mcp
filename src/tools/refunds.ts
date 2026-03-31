@@ -1,7 +1,5 @@
 import { z } from "zod";
-import { YooKassaClient, formatAmount } from "../client.js";
-
-const client = new YooKassaClient();
+import { getClient, formatAmount } from "../client.js";
 
 export const createRefundSchema = z.object({
   payment_id: z.string().describe("ID платежа для возврата"),
@@ -25,12 +23,12 @@ export async function handleCreateRefund(params: z.infer<typeof createRefundSche
   };
   if (params.description) body.description = params.description;
 
-  const result = await client.post("/refunds", body);
+  const result = await getClient().post("/refunds", body);
   return JSON.stringify(result, null, 2);
 }
 
 export async function handleGetRefund(params: z.infer<typeof getRefundSchema>): Promise<string> {
-  const result = await client.get(`/refunds/${params.refund_id}`);
+  const result = await getClient().get(`/refunds/${params.refund_id}`);
   return JSON.stringify(result, null, 2);
 }
 
@@ -39,6 +37,6 @@ export async function handleListRefunds(params: z.infer<typeof listRefundsSchema
   query.set("limit", String(params.limit));
   if (params.payment_id) query.set("payment_id", params.payment_id);
 
-  const result = await client.get(`/refunds?${query.toString()}`);
+  const result = await getClient().get(`/refunds?${query.toString()}`);
   return JSON.stringify(result, null, 2);
 }

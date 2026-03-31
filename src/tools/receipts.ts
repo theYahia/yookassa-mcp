@@ -1,7 +1,5 @@
 import { z } from "zod";
-import { YooKassaClient, formatAmount } from "../client.js";
-
-const client = new YooKassaClient();
+import { getClient, formatAmount } from "../client.js";
 
 export const createReceiptSchema = z.object({
   type: z.enum(["payment", "refund"]).describe("Тип чека"),
@@ -30,6 +28,6 @@ export async function handleCreateReceipt(params: z.infer<typeof createReceiptSc
     })),
   };
 
-  const result = await client.post("/receipts", body);
+  const result = await getClient().post("/receipts", body);
   return JSON.stringify(result, null, 2);
 }

@@ -4,23 +4,35 @@ const BASE_URL = "https://api.yookassa.ru/v3";
 const TIMEOUT = 10_000;
 const MAX_RETRIES = 3;
 
+let _instance: YooKassaClient | null = null;
+
+export function getClient(): YooKassaClient {
+  if (!_instance) {
+    _instance = new YooKassaClient();
+  }
+  return _instance;
+}
+
+/** For testing only */
+export function resetClient(): void {
+  _instance = null;
+}
+
 export class YooKassaClient {
-  private shopId: string;
-  private secretKey: string;
   private authHeader: string;
 
-  constructor() {
-    this.shopId = process.env.YOOKASSA_SHOP_ID ?? "";
-    this.secretKey = process.env.YOOKASSA_SECRET_KEY ?? "";
+  constructor(shopId?: string, secretKey?: string) {
+    const sid = shopId ?? process.env.YOOKASSA_SHOP_ID ?? "";
+    const key = secretKey ?? process.env.YOOKASSA_SECRET_KEY ?? "";
 
-    if (!this.shopId || !this.secretKey) {
+    if (!sid || !key) {
       throw new Error(
         "Переменные окружения YOOKASSA_SHOP_ID и YOOKASSA_SECRET_KEY обязательны. " +
         "Получите их в личном кабинете ЮKassa: Интеграция → Ключи API"
       );
     }
 
-    this.authHeader = "Basic " + Buffer.from(`${this.shopId}:${this.secretKey}`).toString("base64");
+    this.authHeader = "Basic " + Buffer.from(`${sid}:${key}`).toString("base64");
   }
 
   async get(path: string): Promise<unknown> {

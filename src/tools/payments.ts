@@ -1,7 +1,5 @@
 import { z } from "zod";
-import { YooKassaClient, formatAmount } from "../client.js";
-
-const client = new YooKassaClient();
+import { getClient, formatAmount } from "../client.js";
 
 // --- Schemas ---
 
@@ -53,23 +51,23 @@ export async function handleCreatePayment(params: z.infer<typeof createPaymentSc
     body.payment_method_data = { type: params.payment_method_type };
   }
 
-  const result = await client.post("/payments", body);
+  const result = await getClient().post("/payments", body);
   return JSON.stringify(result, null, 2);
 }
 
 export async function handleGetPayment(params: z.infer<typeof getPaymentSchema>): Promise<string> {
-  const result = await client.get(`/payments/${params.payment_id}`);
+  const result = await getClient().get(`/payments/${params.payment_id}`);
   return JSON.stringify(result, null, 2);
 }
 
 export async function handleCapturePayment(params: z.infer<typeof capturePaymentSchema>): Promise<string> {
   const body = params.amount ? { amount: formatAmount(params.amount) } : {};
-  const result = await client.post(`/payments/${params.payment_id}/capture`, body);
+  const result = await getClient().post(`/payments/${params.payment_id}/capture`, body);
   return JSON.stringify(result, null, 2);
 }
 
 export async function handleCancelPayment(params: z.infer<typeof cancelPaymentSchema>): Promise<string> {
-  const result = await client.post(`/payments/${params.payment_id}/cancel`, {});
+  const result = await getClient().post(`/payments/${params.payment_id}/cancel`, {});
   return JSON.stringify(result, null, 2);
 }
 
@@ -80,6 +78,6 @@ export async function handleListPayments(params: z.infer<typeof listPaymentsSche
   if (params.created_at_gte) query.set("created_at.gte", params.created_at_gte);
   if (params.created_at_lte) query.set("created_at.lte", params.created_at_lte);
 
-  const result = await client.get(`/payments?${query.toString()}`);
+  const result = await getClient().get(`/payments?${query.toString()}`);
   return JSON.stringify(result, null, 2);
 }
