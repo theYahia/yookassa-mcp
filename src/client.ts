@@ -6,14 +6,13 @@ const MAX_RETRIES = 3;
 
 let _instance: YooKassaClient | null = null;
 
+/** Lazy singleton -- created on first use so tests can set env vars before import */
 export function getClient(): YooKassaClient {
-  if (!_instance) {
-    _instance = new YooKassaClient();
-  }
+  if (!_instance) _instance = new YooKassaClient();
   return _instance;
 }
 
-/** For testing only */
+/** Reset singleton (for tests) */
 export function resetClient(): void {
   _instance = null;
 }
@@ -28,7 +27,7 @@ export class YooKassaClient {
     if (!sid || !key) {
       throw new Error(
         "Переменные окружения YOOKASSA_SHOP_ID и YOOKASSA_SECRET_KEY обязательны. " +
-        "Получите их в личном кабинете ЮKassa: Интеграция → Ключи API"
+        "Получите их в личном кабинете ЮKassa: Интеграция -> Ключи API"
       );
     }
 
@@ -41,6 +40,10 @@ export class YooKassaClient {
 
   async post(path: string, body?: unknown): Promise<unknown> {
     return this.request("POST", path, body);
+  }
+
+  async delete(path: string): Promise<unknown> {
+    return this.request("DELETE", path);
   }
 
   private async request(method: string, path: string, body?: unknown): Promise<unknown> {
@@ -68,6 +71,11 @@ export class YooKassaClient {
         });
         clearTimeout(timer);
 
+        // DELETE with 204 returns no content
+        if (response.ok && response.status === 204) {
+          return { success: true };
+        }
+
         if (response.ok) {
           return response.json();
         }
@@ -77,50 +85,50 @@ export class YooKassaClient {
         try {
           parsed = JSON.parse(errorBody) as YooKassaError;
         } catch {
-          // не JSON
+          // not JSON
         }
 
-        // Retry на 429 и 5xx
+        // Retry on 429 and 5xx
         if ((response.status === 429 || response.status >= 500) && attempt < MAX_RETRIES) {
           const delay = Math.min(1000 * 2 ** (attempt - 1), 8000);
-          console.error(`[yookassa-mcp] ${response.status} от ${path}, повтор через ${delay}мс (${attempt}/${MAX_RETRIES})`);
+          console.error(`[yookassa-mcp] ${response.status} from ${path}, retry in ${delay}ms (${attempt}/${MAX_RETRIES})`);
 
           if (response.status >= 500) {
-            console.error("[yookassa-mcp] ВНИМАНИЕ: HTTP 500 — результат операции неопределён. Проверьте GET-запросом.");
+            console.error("[yookassa-mcp] WARNING: HTTP 500 -- operation result is undefined. Check with GET.");
           }
 
           await new Promise(r => setTimeout(r, delay));
           continue;
         }
 
-        // Формируем читаемую ошибку
+        // Readable error
         if (parsed?.type === "error") {
           const hint = response.status === 401
-            ? " Проверьте YOOKASSA_SHOP_ID и YOOKASSA_SECRET_KEY."
+            ? " Check YOOKASSA_SHOP_ID and YOOKASSA_SECRET_KEY."
             : "";
-          const param = parsed.parameter ? ` (параметр: ${parsed.parameter})` : "";
-          throw new Error(`ЮKassa [${parsed.code}]: ${parsed.description}${param}${hint}`);
+          const param = parsed.parameter ? ` (param: ${parsed.parameter})` : "";
+          throw new Error(`YooKassa [${parsed.code}]: ${parsed.description}${param}${hint}`);
         }
 
-        throw new Error(`ЮKassa HTTP ${response.status}: ${errorBody}`);
+        throw new Error(`YooKassa HTTP ${response.status}: ${errorBody}`);
       } catch (error) {
         clearTimeout(timer);
         if (error instanceof DOMException && error.name === "AbortError") {
           if (attempt < MAX_RETRIES) {
-            console.error(`[yookassa-mcp] Таймаут ${path}, повтор (${attempt}/${MAX_RETRIES})`);
+            console.error(`[yookassa-mcp] Timeout ${path}, retry (${attempt}/${MAX_RETRIES})`);
             continue;
           }
-          throw new Error("ЮKassa: таймаут запроса (10 секунд). Попробуйте позже.");
+          throw new Error("YooKassa: request timeout (10s). Try again later.");
         }
         throw error;
       }
     }
 
-    throw new Error("ЮKassa: все попытки исчерпаны");
+    throw new Error("YooKassa: all retries exhausted");
   }
 }
 
-/** Конвертация числа в строку формата ЮKassa: 100 → "100.00" */
+/** Convert number to YooKassa amount format: 100 -> "100.00" */
 export function formatAmount(amount: number, currency = "RUB"): { value: string; currency: string } {
   return { value: amount.toFixed(2), currency };
 }

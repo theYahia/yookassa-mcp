@@ -61,6 +61,22 @@ export interface AccountInfo {
   fiscalization_enabled: boolean;
 }
 
+export interface Webhook {
+  id: string;
+  event: string;
+  url: string;
+}
+
+export interface Payout {
+  id: string;
+  status: "pending" | "succeeded" | "canceled";
+  amount: YooKassaAmount;
+  description?: string;
+  created_at: string;
+  deal?: Record<string, unknown>;
+  metadata?: Record<string, string>;
+}
+
 export interface YooKassaError {
   type: "error";
   id: string;

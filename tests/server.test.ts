@@ -21,9 +21,9 @@ describe("MCP Server smoke test", () => {
     ]);
   });
 
-  it("lists exactly 10 tools", async () => {
+  it("lists exactly 20 tools", async () => {
     const result = await client.listTools();
-    expect(result.tools).toHaveLength(10);
+    expect(result.tools).toHaveLength(20);
   });
 
   it("has all expected tool names", async () => {
@@ -33,13 +33,23 @@ describe("MCP Server smoke test", () => {
       "cancel_payment",
       "capture_payment",
       "create_payment",
+      "create_payout",
       "create_receipt",
+      "create_recurring_payment",
       "create_refund",
-      "get_balance",
+      "create_sbp_payment",
+      "create_split_payment",
+      "create_webhook",
+      "delete_webhook",
       "get_payment",
+      "get_payout",
       "get_refund",
+      "get_shop_balance",
       "list_payments",
+      "list_receipts",
       "list_refunds",
+      "list_webhooks",
+      "save_payment_method",
     ]);
   });
 

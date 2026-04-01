@@ -10,25 +10,42 @@ import {
   capturePaymentSchema, handleCapturePayment,
   cancelPaymentSchema, handleCancelPayment,
   listPaymentsSchema, handleListPayments,
+  savePaymentMethodSchema, handleSavePaymentMethod,
+  createRecurringPaymentSchema, handleCreateRecurringPayment,
+  createSbpPaymentSchema, handleCreateSbpPayment,
+  createSplitPaymentSchema, handleCreateSplitPayment,
 } from "./tools/payments.js";
 import {
   createRefundSchema, handleCreateRefund,
   getRefundSchema, handleGetRefund,
   listRefundsSchema, handleListRefunds,
 } from "./tools/refunds.js";
-import { createReceiptSchema, handleCreateReceipt } from "./tools/receipts.js";
+import {
+  createReceiptSchema, handleCreateReceipt,
+  listReceiptsSchema, handleListReceipts,
+} from "./tools/receipts.js";
 import { handleGetBalance } from "./tools/balance.js";
+import {
+  createPayoutSchema, handleCreatePayout,
+  getPayoutSchema, handleGetPayout,
+} from "./tools/payouts.js";
+import {
+  createWebhookSchema, handleCreateWebhook,
+  handleListWebhooks,
+  deleteWebhookSchema, handleDeleteWebhook,
+} from "./tools/webhooks.js";
 
 export function createMcpServer(): McpServer {
   const server = new McpServer({
     name: "yookassa-mcp",
-    version: "1.0.0",
+    version: "2.0.0",
   });
 
-  // Payments
+  // === Payments (9) ===
+
   server.tool(
     "create_payment",
-    "Создать платёж в ЮKassa. Возвращает ссылку на оплату.",
+    "Create a payment in YooKassa. Returns a payment URL. Supports one-step and two-step payments, receipts, and metadata.",
     createPaymentSchema.shape,
     async (params) => ({
       content: [{ type: "text", text: await handleCreatePayment(params) }],
@@ -37,7 +54,7 @@ export function createMcpServer(): McpServer {
 
   server.tool(
     "get_payment",
-    "Получить информацию о платеже по ID.",
+    "Get payment details by ID. Returns status, amount, payment method, confirmation URL, and metadata.",
     getPaymentSchema.shape,
     async (params) => ({
       content: [{ type: "text", text: await handleGetPayment(params) }],
@@ -46,7 +63,7 @@ export function createMcpServer(): McpServer {
 
   server.tool(
     "capture_payment",
-    "Подтвердить платёж (для двухстадийных). Можно подтвердить частичную сумму.",
+    "Confirm a two-step payment (capture held funds). Optionally capture a partial amount.",
     capturePaymentSchema.shape,
     async (params) => ({
       content: [{ type: "text", text: await handleCapturePayment(params) }],
@@ -55,7 +72,7 @@ export function createMcpServer(): McpServer {
 
   server.tool(
     "cancel_payment",
-    "Отменить платёж.",
+    "Cancel a payment. Works for pending and waiting_for_capture statuses.",
     cancelPaymentSchema.shape,
     async (params) => ({
       content: [{ type: "text", text: await handleCancelPayment(params) }],
@@ -64,17 +81,54 @@ export function createMcpServer(): McpServer {
 
   server.tool(
     "list_payments",
-    "Список платежей с фильтрами по статусу и дате.",
+    "List payments with filters by status, date range, and pagination cursor.",
     listPaymentsSchema.shape,
     async (params) => ({
       content: [{ type: "text", text: await handleListPayments(params) }],
     }),
   );
 
-  // Refunds
+  server.tool(
+    "save_payment_method",
+    "Save a payment method for recurring charges. Creates a small payment to bind the card/wallet, then it can be used for recurring payments.",
+    savePaymentMethodSchema.shape,
+    async (params) => ({
+      content: [{ type: "text", text: await handleSavePaymentMethod(params) }],
+    }),
+  );
+
+  server.tool(
+    "create_recurring_payment",
+    "Charge a saved payment method (recurring payment). No user interaction needed.",
+    createRecurringPaymentSchema.shape,
+    async (params) => ({
+      content: [{ type: "text", text: await handleCreateRecurringPayment(params) }],
+    }),
+  );
+
+  server.tool(
+    "create_sbp_payment",
+    "Create a payment via SBP (Russian fast payment system). Returns a deep-link for the payer's banking app.",
+    createSbpPaymentSchema.shape,
+    async (params) => ({
+      content: [{ type: "text", text: await handleCreateSbpPayment(params) }],
+    }),
+  );
+
+  server.tool(
+    "create_split_payment",
+    "Create a split payment for marketplaces. Distributes funds among multiple recipients (partners).",
+    createSplitPaymentSchema.shape,
+    async (params) => ({
+      content: [{ type: "text", text: await handleCreateSplitPayment(params) }],
+    }),
+  );
+
+  // === Refunds (3) ===
+
   server.tool(
     "create_refund",
-    "Сделать возврат по платежу (полный или частичный).",
+    "Refund a payment (full or partial). Specify payment_id and amount.",
     createRefundSchema.shape,
     async (params) => ({
       content: [{ type: "text", text: await handleCreateRefund(params) }],
@@ -83,7 +137,7 @@ export function createMcpServer(): McpServer {
 
   server.tool(
     "get_refund",
-    "Получить информацию о возврате по ID.",
+    "Get refund details by ID. Returns status, amount, and payment reference.",
     getRefundSchema.shape,
     async (params) => ({
       content: [{ type: "text", text: await handleGetRefund(params) }],
@@ -92,27 +146,87 @@ export function createMcpServer(): McpServer {
 
   server.tool(
     "list_refunds",
-    "Список возвратов с фильтром по платежу.",
+    "List refunds with optional filter by payment_id.",
     listRefundsSchema.shape,
     async (params) => ({
       content: [{ type: "text", text: await handleListRefunds(params) }],
     }),
   );
 
-  // Receipts
+  // === Receipts (2) ===
+
   server.tool(
     "create_receipt",
-    "Создать кассовый чек 54-ФЗ для платежа или возврата.",
+    "Create a fiscal receipt (54-FZ compliance). Supports payment and refund receipts with items, VAT codes, and customer contacts.",
     createReceiptSchema.shape,
     async (params) => ({
       content: [{ type: "text", text: await handleCreateReceipt(params) }],
     }),
   );
 
-  // Balance
   server.tool(
-    "get_balance",
-    "Информация о магазине: ID, статус, тестовый режим, фискализация.",
+    "list_receipts",
+    "List receipts with filters by payment_id or refund_id.",
+    listReceiptsSchema.shape,
+    async (params) => ({
+      content: [{ type: "text", text: await handleListReceipts(params) }],
+    }),
+  );
+
+  // === Payouts (2) ===
+
+  server.tool(
+    "create_payout",
+    "Create a payout to a bank card, YooMoney wallet, or SBP phone number.",
+    createPayoutSchema.shape,
+    async (params) => ({
+      content: [{ type: "text", text: await handleCreatePayout(params) }],
+    }),
+  );
+
+  server.tool(
+    "get_payout",
+    "Get payout details by ID. Returns status, amount, and destination.",
+    getPayoutSchema.shape,
+    async (params) => ({
+      content: [{ type: "text", text: await handleGetPayout(params) }],
+    }),
+  );
+
+  // === Webhooks (3) ===
+
+  server.tool(
+    "create_webhook",
+    "Register a webhook URL for YooKassa events (payment.succeeded, refund.succeeded, etc.).",
+    createWebhookSchema.shape,
+    async (params) => ({
+      content: [{ type: "text", text: await handleCreateWebhook(params) }],
+    }),
+  );
+
+  server.tool(
+    "list_webhooks",
+    "List all registered webhooks for this shop.",
+    {},
+    async () => ({
+      content: [{ type: "text", text: await handleListWebhooks() }],
+    }),
+  );
+
+  server.tool(
+    "delete_webhook",
+    "Delete a webhook by ID. Stops sending notifications for that webhook.",
+    deleteWebhookSchema.shape,
+    async (params) => ({
+      content: [{ type: "text", text: await handleDeleteWebhook(params) }],
+    }),
+  );
+
+  // === Account (1) ===
+
+  server.tool(
+    "get_shop_balance",
+    "Get shop info: ID, status, test mode, fiscalization settings.",
     {},
     async () => ({
       content: [{ type: "text", text: await handleGetBalance() }],
@@ -124,7 +238,6 @@ export function createMcpServer(): McpServer {
 
 async function startHttpServer(server: McpServer, port: number): Promise<void> {
   const httpServer = createServer(async (req, res) => {
-    // CORS headers
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Accept, Mcp-Session-Id");
@@ -136,14 +249,12 @@ async function startHttpServer(server: McpServer, port: number): Promise<void> {
       return;
     }
 
-    // Health check
     if (req.url === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "ok", server: "yookassa-mcp", tools: 10 }));
+      res.end(JSON.stringify({ status: "ok", server: "yookassa-mcp", tools: 20 }));
       return;
     }
 
-    // MCP endpoint
     if (req.url === "/mcp") {
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => crypto.randomUUID() });
       await server.connect(transport);
@@ -156,7 +267,7 @@ async function startHttpServer(server: McpServer, port: number): Promise<void> {
   });
 
   httpServer.listen(port, () => {
-    console.error(`[yookassa-mcp] HTTP сервер запущен на порту ${port}`);
+    console.error(`[yookassa-mcp] HTTP server on port ${port}`);
     console.error(`[yookassa-mcp] MCP: http://localhost:${port}/mcp`);
     console.error(`[yookassa-mcp] Health: http://localhost:${port}/health`);
   });
@@ -175,11 +286,11 @@ async function main() {
   } else {
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error("[yookassa-mcp] Сервер запущен (stdio). 10 инструментов. Первый MCP для ЮKassa.");
+    console.error("[yookassa-mcp] Server started (stdio). 20 tools. Production-grade YooKassa MCP.");
   }
 }
 
 main().catch((error) => {
-  console.error("[yookassa-mcp] Ошибка запуска:", error);
+  console.error("[yookassa-mcp] Startup error:", error);
   process.exit(1);
 });

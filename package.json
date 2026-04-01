@@ -1,7 +1,7 @@
 {
   "name": "@theyahia/yookassa-mcp",
-  "version": "1.0.2",
-  "description": "MCP server for YooKassa payment API — payments, refunds, receipts (54-FZ). 10 tools. First MCP for YooKassa.",
+  "version": "2.0.0",
+  "description": "MCP server for YooKassa payment API — payments, refunds, receipts (54-FZ), payouts, webhooks, recurring, SBP, splits. 20 tools.",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -29,30 +29,17 @@
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
-    "vitest": "^4.1.2"
+    "vitest": "^3.0.0"
   },
   "publishConfig": {
     "access": "public"
   },
   "mcpName": "io.github.theYahia/yookassa-mcp",
   "keywords": [
-    "mcp",
-    "mcp-server",
-    "model-context-protocol",
-    "modelcontextprotocol",
-    "claude",
-    "ai",
-    "llm",
-    "anthropic",
-    "cursor",
-    "ai-tools",
-    "ai-agent",
-    "russian-api",
-    "yookassa",
-    "payment",
-    "refund",
-    "receipt",
-    "54-fz"
+    "mcp", "mcp-server", "model-context-protocol", "modelcontextprotocol",
+    "claude", "ai", "llm", "anthropic", "cursor", "ai-tools", "ai-agent",
+    "russian-api", "yookassa", "payment", "refund", "receipt", "54-fz",
+    "payout", "webhook", "recurring", "sbp", "split-payment", "marketplace"
   ],
   "license": "MIT",
   "repository": {

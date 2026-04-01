@@ -99,7 +99,7 @@ describe("HTTP calls with mocked fetch", () => {
       }), { status: 401 }),
     );
 
-    await expect(client.get("/me")).rejects.toThrow("Проверьте YOOKASSA_SHOP_ID");
+    await expect(client.get("/me")).rejects.toThrow("YOOKASSA_SHOP_ID");
   });
 
   it("handles 403 error", async () => {
