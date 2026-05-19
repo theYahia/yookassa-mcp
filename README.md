@@ -1,3 +1,5 @@
+> 📦 Part of **[WWmcp — Emerging Markets MCP](https://github.com/theYahia/WWmcp)** — 114 MCP servers for non-Western APIs (Brazil/MENA/Gulf/SE Asia/Africa/CIS).
+
 # @theyahia/yookassa-mcp
 
 MCP server for YooKassa API -- payments, refunds, receipts (54-FZ), payouts, webhooks, recurring, SBP, marketplace splits. **20 tools.**
@@ -140,11 +142,11 @@ For testing, create a demo shop in [YooKassa dashboard](https://yookassa.ru/my/s
 |------|-------------|
 | `get_shop_balance` | Shop info -- ID, status, test mode, fiscalization |
 
-## Demo Prompts
+## 🚀 Demo prompts
 
-```
-Create a payment for 5000 RUB for order #123 with SBP as payment method
-```
+> **Use case (RU):** "Создай платёжную ссылку YooKassa на 5000 ₽ для заказа #N, верни QR-код СБП"
+
+Дополнительные примеры:
 
 ```
 Set up a recurring subscription: bind the card with 1 ruble, then charge 999 RUB monthly using the saved method
@@ -153,6 +155,11 @@ Set up a recurring subscription: bind the card with 1 ruble, then charge 999 RUB
 ```
 Show all successful payments for the last 7 days and create a refund of 2500 RUB for payment pay_xxx
 ```
+
+🤖 **Pairs well with:**
+- [`@theyahia/cdek-mcp`](https://github.com/theYahia/cdek-mcp)
+- [`@theyahia/moysklad-mcp`](https://github.com/theYahia/moysklad-mcp)
+- [`@theyahia/tkassa-mcp`](https://github.com/theYahia/tkassa-mcp)
 
 ## Architecture
 
@@ -176,3 +183,7 @@ Show all successful payments for the last 7 days and create a refund of 2500 RUB
 ## License
 
 MIT
+
+---
+
+⭐ **Star if you build with YooKassa** — helps other devs find this server.
