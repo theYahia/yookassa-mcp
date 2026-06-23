@@ -187,6 +187,9 @@ export const moneyAmount = z.union([
   z.number().positive(),
 ]);
 
+/** ISO-4217 currency code (uppercase, 3 letters), default RUB. Rejects typos like 'rub'/'руб'. */
+export const currencyCode = z.string().regex(/^[A-Z]{3}$/, "Валюта в формате ISO-4217, заглавными (например RUB, USD)").default("RUB");
+
 /** Amount as integer kopecks, without lossy float arithmetic where possible. */
 export function toKopecks(value: string | number): number {
   if (typeof value === "string") {

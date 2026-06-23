@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { getClient, formatAmount, formatKopecks, moneyAmount, toKopecks } from "../client.js";
+import { getClient, formatAmount, formatKopecks, moneyAmount, currencyCode, toKopecks } from "../client.js";
 import { buildReceiptItems } from "./receipts.js";
 
 // --- Schemas ---
 
 export const createPaymentSchema = z.object({
   amount: moneyAmount.describe("Сумма платежа в рублях (строка '5000.00' — точно, или число)"),
-  currency: z.string().default("RUB").describe("Валюта (по умолчанию RUB)"),
+  currency: currencyCode.describe("Валюта (ISO-4217, по умолчанию RUB)"),
   description: z.string().max(128).describe("Описание платежа (макс 128 символов)"),
   capture: z.boolean().default(true).describe("true = одностадийный, false = холдирование"),
   confirmation_type: z.enum(["redirect", "embedded", "qr"]).default("redirect").describe("Тип подтверждения оплаты: redirect (нужен return_url), embedded (виджет) или qr"),
@@ -35,7 +35,7 @@ export const getPaymentSchema = z.object({
 
 export const capturePaymentSchema = z.object({
   payment_id: z.string().describe("ID платежа для подтверждения"),
-  amount: moneyAmount.optional().describe("Сумма для частичного подтверждения (опционально)"),
+  amount: moneyAmount.optional().describe("Сумма для частичного подтверждения (опционально; не больше суммы холдирования, та же валюта). Превышение отклонит ЮKassa"),
 });
 
 export const cancelPaymentSchema = z.object({
@@ -52,7 +52,7 @@ export const listPaymentsSchema = z.object({
 
 export const savePaymentMethodSchema = z.object({
   amount: moneyAmount.describe("Сумма для привязки (минимум 1 рубль, спишется и вернётся)"),
-  currency: z.string().default("RUB").describe("Валюта"),
+  currency: currencyCode.describe("Валюта (ISO-4217, по умолчанию RUB)"),
   description: z.string().default("Привязка карты").describe("Описание"),
   return_url: z.string().url().describe("URL возврата после привязки"),
   payment_method_type: z.enum(["bank_card", "yoo_money", "sberbank"]).default("bank_card").describe("Тип метода оплаты"),
@@ -61,13 +61,13 @@ export const savePaymentMethodSchema = z.object({
 export const createRecurringPaymentSchema = z.object({
   payment_method_id: z.string().describe("ID сохранённого метода оплаты (из payment_method.id)"),
   amount: moneyAmount.describe("Сумма рекуррентного платежа"),
-  currency: z.string().default("RUB").describe("Валюта"),
+  currency: currencyCode.describe("Валюта (ISO-4217, по умолчанию RUB)"),
   description: z.string().max(128).describe("Описание рекуррентного платежа"),
 });
 
 export const createSbpPaymentSchema = z.object({
   amount: moneyAmount.describe("Сумма платежа через СБП"),
-  currency: z.string().default("RUB").describe("Валюта"),
+  currency: currencyCode.describe("Валюта (ISO-4217, по умолчанию RUB)"),
   description: z.string().max(128).describe("Описание платежа"),
   confirmation_type: z.enum(["redirect", "embedded", "qr"]).default("redirect").describe("Тип подтверждения: redirect (нужен return_url), embedded или qr"),
   return_url: z.string().url().optional().describe("URL возврата — ОБЯЗАТЕЛЕН при confirmation_type=redirect"),
@@ -75,7 +75,7 @@ export const createSbpPaymentSchema = z.object({
 
 export const createSplitPaymentSchema = z.object({
   amount: moneyAmount.describe("Общая сумма платежа"),
-  currency: z.string().default("RUB").describe("Валюта"),
+  currency: currencyCode.describe("Валюта (ISO-4217, по умолчанию RUB)"),
   description: z.string().max(128).describe("Описание платежа"),
   confirmation_type: z.enum(["redirect", "embedded", "qr"]).default("redirect").describe("Тип подтверждения: redirect (нужен return_url), embedded или qr"),
   return_url: z.string().url().optional().describe("URL возврата — ОБЯЗАТЕЛЕН при confirmation_type=redirect"),

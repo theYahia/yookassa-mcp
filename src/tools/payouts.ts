@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { getPayoutClient, formatAmount, moneyAmount } from "../client.js";
+import { getPayoutClient, formatAmount, moneyAmount, currencyCode } from "../client.js";
 
 export const createPayoutSchema = z.object({
   amount: moneyAmount.describe("Сумма выплаты"),
-  currency: z.string().default("RUB").describe("Валюта"),
+  currency: currencyCode.describe("Валюта (ISO-4217, по умолчанию RUB)"),
   payout_token: z.string().optional().describe("Токен получателя из виджета выплат (предпочтительно; нужен если у вас нет PCI DSS для приёма сырого номера карты)"),
   destination_type: z.enum(["bank_card", "yoo_money", "sbp"]).optional().describe("Тип получателя (если не используется payout_token). bank_card требует сертификат PCI DSS"),
   destination_value: z.string().optional().describe("Реквизит получателя: номер карты (bank_card), номер кошелька (yoo_money) или телефон 79XXXXXXXXX (sbp)"),
