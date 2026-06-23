@@ -150,7 +150,7 @@ For testing, create a demo shop in [YooKassa dashboard](https://yookassa.ru/my/s
 
 | Tool | Description |
 |------|-------------|
-| `get_shop_balance` | Shop info -- ID, status, test mode, fiscalization |
+| `get_shop_info` | Shop info -- ID, status, test mode, fiscalization (YooKassa has no balance endpoint) |
 
 ## Demo Prompts
 

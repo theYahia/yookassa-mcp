@@ -7,6 +7,8 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import { timingSafeEqual } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { z } from "zod";
 import {
   createPaymentSchema, handleCreatePayment,
   getPaymentSchema, handleGetPayment,
@@ -38,203 +40,220 @@ import {
   deleteWebhookSchema, handleDeleteWebhook,
 } from "./tools/webhooks.js";
 
+const pkg = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+) as { version: string };
+
+const SERVER_INSTRUCTIONS =
+  "This server wraps the YooKassa payment API. Tools that move REAL MONEY " +
+  "(create_payment, create_payout, create_refund, create_recurring_payment, " +
+  "save_payment_method, capture_payment) are irreversible — confirm the amount, currency, " +
+  "and recipient with the user before calling them, and prefer test-shop credentials while " +
+  "developing (check get_shop_info: test=true). Read tools (get_*/list_*/get_shop_info) are " +
+  "safe to call freely.";
+
+// --- Annotation presets (hints to clients; see MCP ToolAnnotations) ---
+const READ_ONLY = { readOnlyHint: true, openWorldHint: true } as const;
+function writeMoney(idempotent = false) {
+  return { readOnlyHint: false, destructiveHint: true, idempotentHint: idempotent, openWorldHint: true } as const;
+}
+
+// --- Structured output for single-object (payment/refund/payout) results ---
+const objectResultSchema = {
+  id: z.string().optional(),
+  status: z.string().optional(),
+  paid: z.boolean().optional(),
+  amount: z.object({ value: z.string(), currency: z.string() }).partial().optional(),
+  confirmation_url: z.string().optional(),
+};
+function toStructured(text: string): Record<string, unknown> {
+  try {
+    const r = JSON.parse(text) as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const k of ["id", "status", "paid", "amount"]) {
+      if (r[k] !== undefined) out[k] = r[k];
+    }
+    const confirmation = r.confirmation as { confirmation_url?: string } | undefined;
+    if (confirmation?.confirmation_url !== undefined) out.confirmation_url = confirmation.confirmation_url;
+    return out;
+  } catch {
+    return {};
+  }
+}
+/** Wrap a string-returning handler into an MCP result with both text and structuredContent. */
+function objectResult(text: string) {
+  return { content: [{ type: "text" as const, text }], structuredContent: toStructured(text) };
+}
+
 export function createMcpServer(): McpServer {
-  const server = new McpServer({
-    name: "yookassa-mcp",
-    version: "2.0.0",
-  });
+  const server = new McpServer(
+    { name: "yookassa-mcp", version: pkg.version },
+    { instructions: SERVER_INSTRUCTIONS },
+  );
 
   // === Payments (9) ===
 
-  server.tool(
-    "create_payment",
-    "Create a payment in YooKassa. Returns a payment URL. Supports one-step and two-step payments, receipts, and metadata.",
-    createPaymentSchema.shape,
-    async (params) => ({
-      content: [{ type: "text", text: await handleCreatePayment(params) }],
-    }),
-  );
+  server.registerTool("create_payment", {
+    title: "Create payment",
+    description: "Create a payment in YooKassa. Returns a confirmation URL. Supports one-step and two-step payments, receipts, and metadata. MOVES REAL MONEY (the payer is charged) — irreversible.",
+    inputSchema: createPaymentSchema.shape,
+    outputSchema: objectResultSchema,
+    annotations: writeMoney(),
+  }, async (params) => objectResult(await handleCreatePayment(params)));
 
-  server.tool(
-    "get_payment",
-    "Get payment details by ID. Returns status, amount, payment method, confirmation URL, and metadata.",
-    getPaymentSchema.shape,
-    async (params) => ({
-      content: [{ type: "text", text: await handleGetPayment(params) }],
-    }),
-  );
+  server.registerTool("get_payment", {
+    title: "Get payment",
+    description: "Get payment details by ID. Returns status, amount, payment method, confirmation URL, and metadata.",
+    inputSchema: getPaymentSchema.shape,
+    outputSchema: objectResultSchema,
+    annotations: READ_ONLY,
+  }, async (params) => objectResult(await handleGetPayment(params)));
 
-  server.tool(
-    "capture_payment",
-    "Confirm a two-step payment (capture held funds). Optionally capture a partial amount.",
-    capturePaymentSchema.shape,
-    async (params) => ({
-      content: [{ type: "text", text: await handleCapturePayment(params) }],
-    }),
-  );
+  server.registerTool("capture_payment", {
+    title: "Capture payment",
+    description: "Confirm a two-step payment (capture held funds). Optionally capture a partial amount. MOVES REAL MONEY — irreversible.",
+    inputSchema: capturePaymentSchema.shape,
+    outputSchema: objectResultSchema,
+    annotations: writeMoney(true),
+  }, async (params) => objectResult(await handleCapturePayment(params)));
 
-  server.tool(
-    "cancel_payment",
-    "Cancel a payment. Works for pending and waiting_for_capture statuses.",
-    cancelPaymentSchema.shape,
-    async (params) => ({
-      content: [{ type: "text", text: await handleCancelPayment(params) }],
-    }),
-  );
+  server.registerTool("cancel_payment", {
+    title: "Cancel payment",
+    description: "Cancel a payment (pending or waiting_for_capture). Releases any held funds.",
+    inputSchema: cancelPaymentSchema.shape,
+    outputSchema: objectResultSchema,
+    annotations: writeMoney(true),
+  }, async (params) => objectResult(await handleCancelPayment(params)));
 
-  server.tool(
-    "list_payments",
-    "List payments with filters by status, date range, and pagination cursor.",
-    listPaymentsSchema.shape,
-    async (params) => ({
-      content: [{ type: "text", text: await handleListPayments(params) }],
-    }),
-  );
+  server.registerTool("list_payments", {
+    title: "List payments",
+    description: "List payments with filters by status, date range, and pagination cursor.",
+    inputSchema: listPaymentsSchema.shape,
+    annotations: READ_ONLY,
+  }, async (params) => ({ content: [{ type: "text", text: await handleListPayments(params) }] }));
 
-  server.tool(
-    "save_payment_method",
-    "Save a payment method for recurring charges. Creates a small payment to bind the card/wallet, then it can be used for recurring payments.",
-    savePaymentMethodSchema.shape,
-    async (params) => ({
-      content: [{ type: "text", text: await handleSavePaymentMethod(params) }],
-    }),
-  );
+  server.registerTool("save_payment_method", {
+    title: "Save payment method",
+    description: "Save a payment method for recurring charges. Creates a small real payment to bind the card/wallet (charged, then refundable). MOVES REAL MONEY — irreversible.",
+    inputSchema: savePaymentMethodSchema.shape,
+    outputSchema: objectResultSchema,
+    annotations: writeMoney(),
+  }, async (params) => objectResult(await handleSavePaymentMethod(params)));
 
-  server.tool(
-    "create_recurring_payment",
-    "Charge a saved payment method (recurring payment). No user interaction needed.",
-    createRecurringPaymentSchema.shape,
-    async (params) => ({
-      content: [{ type: "text", text: await handleCreateRecurringPayment(params) }],
-    }),
-  );
+  server.registerTool("create_recurring_payment", {
+    title: "Create recurring payment",
+    description: "Charge a saved payment method. Charges the card immediately WITHOUT any user interaction. MOVES REAL MONEY — irreversible.",
+    inputSchema: createRecurringPaymentSchema.shape,
+    outputSchema: objectResultSchema,
+    annotations: writeMoney(),
+  }, async (params) => objectResult(await handleCreateRecurringPayment(params)));
 
-  server.tool(
-    "create_sbp_payment",
-    "Create a payment via SBP (Russian fast payment system). Returns a deep-link for the payer's banking app.",
-    createSbpPaymentSchema.shape,
-    async (params) => ({
-      content: [{ type: "text", text: await handleCreateSbpPayment(params) }],
-    }),
-  );
+  server.registerTool("create_sbp_payment", {
+    title: "Create SBP payment",
+    description: "Create a payment via SBP (Russian fast payment system). Returns a confirmation URL / deep-link for the payer's banking app. MOVES REAL MONEY — irreversible.",
+    inputSchema: createSbpPaymentSchema.shape,
+    outputSchema: objectResultSchema,
+    annotations: writeMoney(),
+  }, async (params) => objectResult(await handleCreateSbpPayment(params)));
 
-  server.tool(
-    "create_split_payment",
-    "Create a split payment for marketplaces. Distributes funds among multiple recipients (partners).",
-    createSplitPaymentSchema.shape,
-    async (params) => ({
-      content: [{ type: "text", text: await handleCreateSplitPayment(params) }],
-    }),
-  );
+  server.registerTool("create_split_payment", {
+    title: "Create split payment",
+    description: "Create a split payment for marketplaces (distributes funds among partner shops). Requires the YooKassa-for-platforms product. MOVES REAL MONEY — irreversible.",
+    inputSchema: createSplitPaymentSchema.shape,
+    outputSchema: objectResultSchema,
+    annotations: writeMoney(),
+  }, async (params) => objectResult(await handleCreateSplitPayment(params)));
 
   // === Refunds (3) ===
 
-  server.tool(
-    "create_refund",
-    "Refund a payment (full or partial). Specify payment_id and amount.",
-    createRefundSchema.shape,
-    async (params) => ({
-      content: [{ type: "text", text: await handleCreateRefund(params) }],
-    }),
-  );
+  server.registerTool("create_refund", {
+    title: "Create refund",
+    description: "Refund a payment (full or partial) by payment_id and amount. MOVES REAL MONEY (funds returned to the payer) — irreversible.",
+    inputSchema: createRefundSchema.shape,
+    outputSchema: objectResultSchema,
+    annotations: writeMoney(),
+  }, async (params) => objectResult(await handleCreateRefund(params)));
 
-  server.tool(
-    "get_refund",
-    "Get refund details by ID. Returns status, amount, and payment reference.",
-    getRefundSchema.shape,
-    async (params) => ({
-      content: [{ type: "text", text: await handleGetRefund(params) }],
-    }),
-  );
+  server.registerTool("get_refund", {
+    title: "Get refund",
+    description: "Get refund details by ID. Returns status, amount, and payment reference.",
+    inputSchema: getRefundSchema.shape,
+    outputSchema: objectResultSchema,
+    annotations: READ_ONLY,
+  }, async (params) => objectResult(await handleGetRefund(params)));
 
-  server.tool(
-    "list_refunds",
-    "List refunds with optional filter by payment_id.",
-    listRefundsSchema.shape,
-    async (params) => ({
-      content: [{ type: "text", text: await handleListRefunds(params) }],
-    }),
-  );
+  server.registerTool("list_refunds", {
+    title: "List refunds",
+    description: "List refunds with optional filter by payment_id.",
+    inputSchema: listRefundsSchema.shape,
+    annotations: READ_ONLY,
+  }, async (params) => ({ content: [{ type: "text", text: await handleListRefunds(params) }] }));
 
   // === Receipts (2) ===
 
-  server.tool(
-    "create_receipt",
-    "Create a fiscal receipt (54-FZ compliance). Supports payment and refund receipts with items, VAT codes, and customer contacts.",
-    createReceiptSchema.shape,
-    async (params) => ({
-      content: [{ type: "text", text: await handleCreateReceipt(params) }],
-    }),
-  );
+  server.registerTool("create_receipt", {
+    title: "Create receipt",
+    description: "Create a standalone fiscal receipt (54-FZ). Supports payment and refund receipts with items, VAT codes, and customer contacts.",
+    inputSchema: createReceiptSchema.shape,
+    annotations: writeMoney(),
+  }, async (params) => ({ content: [{ type: "text", text: await handleCreateReceipt(params) }] }));
 
-  server.tool(
-    "list_receipts",
-    "List receipts with filters by payment_id or refund_id.",
-    listReceiptsSchema.shape,
-    async (params) => ({
-      content: [{ type: "text", text: await handleListReceipts(params) }],
-    }),
-  );
+  server.registerTool("list_receipts", {
+    title: "List receipts",
+    description: "List receipts with filters by payment_id or refund_id.",
+    inputSchema: listReceiptsSchema.shape,
+    annotations: READ_ONLY,
+  }, async (params) => ({ content: [{ type: "text", text: await handleListReceipts(params) }] }));
 
   // === Payouts (2) ===
 
-  server.tool(
-    "create_payout",
-    "Create a payout to a bank card, YooMoney wallet, or SBP phone number.",
-    createPayoutSchema.shape,
-    async (params) => ({
-      content: [{ type: "text", text: await handleCreatePayout(params) }],
-    }),
-  );
+  server.registerTool("create_payout", {
+    title: "Create payout",
+    description: "Create a payout to a bank card, YooMoney wallet, or SBP. Requires the separately-activated YooKassa Payouts product with its own credentials (see README/SECURITY). MOVES REAL MONEY — irreversible.",
+    inputSchema: createPayoutSchema.shape,
+    outputSchema: objectResultSchema,
+    annotations: writeMoney(),
+  }, async (params) => objectResult(await handleCreatePayout(params)));
 
-  server.tool(
-    "get_payout",
-    "Get payout details by ID. Returns status, amount, and destination.",
-    getPayoutSchema.shape,
-    async (params) => ({
-      content: [{ type: "text", text: await handleGetPayout(params) }],
-    }),
-  );
+  server.registerTool("get_payout", {
+    title: "Get payout",
+    description: "Get payout details by ID. Returns status, amount, and destination.",
+    inputSchema: getPayoutSchema.shape,
+    outputSchema: objectResultSchema,
+    annotations: READ_ONLY,
+  }, async (params) => objectResult(await handleGetPayout(params)));
 
   // === Webhooks (3) ===
 
-  server.tool(
-    "create_webhook",
-    "Register a webhook URL for YooKassa events (payment.succeeded, refund.succeeded, etc.).",
-    createWebhookSchema.shape,
-    async (params) => ({
-      content: [{ type: "text", text: await handleCreateWebhook(params) }],
-    }),
-  );
+  server.registerTool("create_webhook", {
+    title: "Create webhook",
+    description: "Register a webhook URL for YooKassa events (payment.succeeded, refund.succeeded, etc.).",
+    inputSchema: createWebhookSchema.shape,
+    annotations: writeMoney(),
+  }, async (params) => ({ content: [{ type: "text", text: await handleCreateWebhook(params) }] }));
 
-  server.tool(
-    "list_webhooks",
-    "List all registered webhooks for this shop.",
-    {},
-    async () => ({
-      content: [{ type: "text", text: await handleListWebhooks() }],
-    }),
-  );
+  server.registerTool("list_webhooks", {
+    title: "List webhooks",
+    description: "List all registered webhooks for this shop.",
+    inputSchema: {},
+    annotations: READ_ONLY,
+  }, async () => ({ content: [{ type: "text", text: await handleListWebhooks() }] }));
 
-  server.tool(
-    "delete_webhook",
-    "Delete a webhook by ID. Stops sending notifications for that webhook.",
-    deleteWebhookSchema.shape,
-    async (params) => ({
-      content: [{ type: "text", text: await handleDeleteWebhook(params) }],
-    }),
-  );
+  server.registerTool("delete_webhook", {
+    title: "Delete webhook",
+    description: "Delete a webhook by ID. Stops sending notifications for that webhook.",
+    inputSchema: deleteWebhookSchema.shape,
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
+  }, async (params) => ({ content: [{ type: "text", text: await handleDeleteWebhook(params) }] }));
 
   // === Account (1) ===
 
-  server.tool(
-    "get_shop_balance",
-    "Get shop info: ID, status, test mode, fiscalization settings.",
-    {},
-    async () => ({
-      content: [{ type: "text", text: await handleGetBalance() }],
-    }),
-  );
+  server.registerTool("get_shop_info", {
+    title: "Get shop info",
+    description: "Get shop info: ID, status, test mode, fiscalization settings. (YooKassa has no balance endpoint; this returns shop configuration, not a monetary balance.)",
+    inputSchema: {},
+    annotations: READ_ONLY,
+  }, async () => ({ content: [{ type: "text", text: await handleGetBalance() }] }));
 
   return server;
 }

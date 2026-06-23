@@ -5,9 +5,9 @@ import { fileURLToPath } from "node:url";
 const indexSrc = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
 const skillsDir = fileURLToPath(new URL("../.claude/skills", import.meta.url));
 
-// Tool names registered via server.tool("<name>", ...) in src/index.ts.
+// Tool names registered via server.tool(...) / server.registerTool(...) in src/index.ts.
 const registeredTools = new Set(
-  [...indexSrc.matchAll(/server\.tool\(\s*["']([a-z_]+)["']/g)].map((m) => m[1]),
+  [...indexSrc.matchAll(/server\.(?:tool|registerTool)\(\s*["']([a-z_]+)["']/g)].map((m) => m[1]),
 );
 
 // Backticked snake_case tokens in a skill body that look like a tool reference
