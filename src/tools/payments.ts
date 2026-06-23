@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getClient, formatAmount, moneyAmount } from "../client.js";
+import { getClient, formatAmount, formatKopecks, moneyAmount, toKopecks } from "../client.js";
 import { buildReceiptItems } from "./receipts.js";
 
 // --- Schemas ---
@@ -80,10 +80,12 @@ export const createSplitPaymentSchema = z.object({
   confirmation_type: z.enum(["redirect", "embedded", "qr"]).default("redirect").describe("Тип подтверждения: redirect (нужен return_url), embedded или qr"),
   return_url: z.string().url().optional().describe("URL возврата — ОБЯЗАТЕЛЕН при confirmation_type=redirect"),
   transfers: z.array(z.object({
-    account_id: z.string().describe("ID получателя (shopId партнёра)"),
+    account_id: z.string().describe("ID получателя (shopId партнёра, подключённого к платформе)"),
     amount: moneyAmount.describe("Сумма для этого получателя"),
+    platform_fee_amount: moneyAmount.optional().describe("Комиссия платформы, удерживаемая с этого перевода (тег API platform_fee_amount)"),
     description: z.string().optional().describe("Описание перевода"),
-  })).min(1).describe("Массив получателей (splits) для маркетплейса"),
+    metadata: z.record(z.string()).optional().describe("Метаданные перевода"),
+  })).min(1).describe("Массив получателей (splits). Сумма переводов должна равняться amount. Требует продукт «Сплитование платежей»"),
 });
 
 // --- Handlers ---
@@ -204,6 +206,15 @@ export async function handleCreateSbpPayment(params: z.infer<typeof createSbpPay
 }
 
 export async function handleCreateSplitPayment(params: z.infer<typeof createSplitPaymentSchema>): Promise<string> {
+  // The buyer is charged `amount`, distributed across transfers — their sum must equal it.
+  const totalK = toKopecks(params.amount);
+  const sumK = params.transfers.reduce((s, t) => s + toKopecks(t.amount), 0);
+  if (sumK !== totalK) {
+    throw new Error(
+      `Сумма переводов (${formatKopecks(sumK).value}) должна равняться общей сумме платежа (${formatKopecks(totalK).value}).`
+    );
+  }
+
   const body: Record<string, unknown> = {
     amount: formatAmount(params.amount, params.currency),
     description: params.description,
@@ -212,7 +223,9 @@ export async function handleCreateSplitPayment(params: z.infer<typeof createSpli
     transfers: params.transfers.map(t => ({
       account_id: t.account_id,
       amount: formatAmount(t.amount, params.currency),
+      ...(t.platform_fee_amount !== undefined ? { platform_fee_amount: formatAmount(t.platform_fee_amount, params.currency) } : {}),
       ...(t.description ? { description: t.description } : {}),
+      ...(t.metadata ? { metadata: t.metadata } : {}),
     })),
   };
 

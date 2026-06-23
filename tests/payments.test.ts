@@ -280,6 +280,39 @@ describe("create_split_payment", () => {
     expect(body.transfers[0].amount.value).toBe("7000.00");
     expect(body.transfers[1].account_id).toBe("shop_2");
   });
+
+  it("includes platform_fee_amount per transfer", async () => {
+    mockFetch.mockResolvedValueOnce(mockOk({ id: "pay_split2" }));
+    await handleCreateSplitPayment({
+      amount: 10000,
+      currency: "RUB",
+      description: "With fee",
+      confirmation_type: "redirect",
+      return_url: "https://shop.example/return",
+      transfers: [
+        { account_id: "shop_1", amount: 6000, platform_fee_amount: 600 },
+        { account_id: "shop_2", amount: 4000 },
+      ],
+    });
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.transfers[0].platform_fee_amount).toEqual({ value: "600.00", currency: "RUB" });
+    expect(body.transfers[1].platform_fee_amount).toBeUndefined();
+  });
+
+  it("rejects when transfers do not sum to the total", async () => {
+    await expect(handleCreateSplitPayment({
+      amount: 10000,
+      currency: "RUB",
+      description: "Mismatch",
+      confirmation_type: "redirect",
+      return_url: "https://shop.example/return",
+      transfers: [
+        { account_id: "shop_1", amount: 7000 },
+        { account_id: "shop_2", amount: 2000 },
+      ],
+    })).rejects.toThrow(/Сумма переводов/);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
 });
 
 describe("error handling", () => {
