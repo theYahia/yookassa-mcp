@@ -1,7 +1,10 @@
 import type { YooKassaError } from "./types.js";
 
 const BASE_URL = "https://api.yookassa.ru/v3";
-const TIMEOUT = 10_000;
+// YooKassa may take up to ~30s to produce an answer (HTTP 500 means "no answer in time").
+// Keep the client timeout above that window so a slow-but-successful create is not aborted
+// client-side and then retried. Retries are safe because the Idempotence-Key is stable.
+const TIMEOUT = 35_000;
 const MAX_RETRIES = 3;
 
 let _instance: YooKassaClient | null = null;
@@ -101,8 +104,12 @@ export class YooKassaClient {
           const delay = Math.min(1000 * 2 ** (attempt - 1), 8000);
           console.error(`[yookassa-mcp] ${response.status} from ${path}, retry in ${delay}ms (${attempt}/${MAX_RETRIES})`);
 
-          if (response.status >= 500) {
-            console.error("[yookassa-mcp] WARNING: HTTP 500 -- operation result is undefined. Check with GET.");
+          if (response.status >= 500 && needsKey) {
+            // 5xx means the operation result is undefined server-side; the retry reuses the
+            // same Idempotence-Key, so YooKassa de-duplicates it (returns the original result
+            // rather than creating a second payment/refund/payout). If retries are exhausted,
+            // verify the final state with a GET before assuming failure.
+            console.error("[yookassa-mcp] WARNING: HTTP 5xx -- result undefined; retrying with the same Idempotence-Key (verify via GET if it ultimately fails).");
           }
 
           await new Promise(r => setTimeout(r, delay));
@@ -126,7 +133,7 @@ export class YooKassaClient {
             console.error(`[yookassa-mcp] Timeout ${path}, retry (${attempt}/${MAX_RETRIES})`);
             continue;
           }
-          throw new Error("YooKassa: request timeout (10s). Try again later.");
+          throw new Error(`YooKassa: request timeout (${TIMEOUT / 1000}s). Try again later.`);
         }
         throw error;
       }
