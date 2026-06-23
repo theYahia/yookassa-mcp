@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock env vars before importing modules
 process.env.YOOKASSA_SHOP_ID = "test_shop_123";
