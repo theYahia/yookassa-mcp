@@ -96,6 +96,7 @@ Endpoints:
 | `HTTP_HOST` | No | Bind address for HTTP mode (default `127.0.0.1`; set `0.0.0.0` to expose — only behind a proxy) |
 | `MCP_ALLOWED_HOSTS` | No | Comma-separated `Host` allowlist (default `127.0.0.1:<port>,localhost:<port>`) |
 | `MCP_ALLOWED_ORIGINS` | No | Comma-separated browser `Origin` CORS allowlist (default: none — browser origins rejected) |
+| `YOOKASSA_DEBUG` | No | Set to `1` to trace each request (method/path/status/latency/idempotency-key) to stderr — never logs secrets, the auth header, or request bodies |
 
 For testing, create a demo shop in [YooKassa dashboard](https://yookassa.ru/my/shop-settings).
 

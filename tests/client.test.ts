@@ -195,4 +195,31 @@ describe("HTTP calls with mocked fetch", () => {
 
     await expect(client.get("/payments")).rejects.toThrow("HTTP 429");
   });
+
+  it("sanitizes a non-JSON error body (truncated, not echoed verbatim)", async () => {
+    const huge = "<html><body>" + "x".repeat(5000) + "</body></html>";
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(huge, { status: 400 }));
+
+    const err = await client.get("/payments").catch((e) => e as Error);
+    expect(err.message).toContain("HTTP 400");
+    expect(err.message).toContain("non-JSON error body");
+    expect(err.message.length).toBeLessThan(300); // not the full 5KB body
+  });
+
+  it("logs request tracing only when YOOKASSA_DEBUG is set", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
+
+    process.env.YOOKASSA_DEBUG = "";
+    await client.get("/payments");
+    expect(spy.mock.calls.some((c) => String(c[0]).includes("[debug]"))).toBe(false);
+
+    process.env.YOOKASSA_DEBUG = "1";
+    await client.get("/payments");
+    expect(spy.mock.calls.some((c) => String(c[0]).includes("[debug]"))).toBe(true);
+
+    delete process.env.YOOKASSA_DEBUG;
+  });
 });

@@ -7,6 +7,14 @@ const BASE_URL = "https://api.yookassa.ru/v3";
 const TIMEOUT = 35_000;
 const MAX_RETRIES = 3;
 
+/** Opt-in request tracing (never logs secrets, auth header, or request bodies/card numbers). */
+function debugEnabled(): boolean {
+  return process.env.YOOKASSA_DEBUG === "1" || process.env.YOOKASSA_DEBUG === "true";
+}
+function debugLog(message: string): void {
+  if (debugEnabled()) console.error(`[yookassa-mcp][debug] ${message}`);
+}
+
 let _instance: YooKassaClient | null = null;
 
 /** Lazy singleton -- created on first use so tests can set env vars before import */
@@ -63,6 +71,7 @@ export class YooKassaClient {
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), TIMEOUT);
+      const startedAt = Date.now();
 
       const headers: Record<string, string> = {
         "Authorization": this.authHeader,
@@ -81,6 +90,7 @@ export class YooKassaClient {
           signal: controller.signal,
         });
         clearTimeout(timer);
+        debugLog(`${method} ${path} -> ${response.status} (${Date.now() - startedAt}ms, attempt ${attempt}/${MAX_RETRIES}${key ? `, idem ${key}` : ""})`);
 
         // DELETE with 204 returns no content
         if (response.ok && response.status === 204) {
@@ -125,10 +135,14 @@ export class YooKassaClient {
           throw new Error(`YooKassa [${parsed.code}]: ${parsed.description}${param}${hint}`);
         }
 
-        throw new Error(`YooKassa HTTP ${response.status}: ${errorBody}`);
+        // Non-JSON / unexpected error body (HTML proxy pages, gateway errors): do not echo
+        // the raw bytes into the caller's output — return a compact, truncated snippet.
+        const snippet = errorBody.replace(/\s+/g, " ").trim().slice(0, 200);
+        throw new Error(`YooKassa HTTP ${response.status}: non-JSON error body${snippet ? ` (${snippet})` : ""}`);
       } catch (error) {
         clearTimeout(timer);
         if (error instanceof DOMException && error.name === "AbortError") {
+          debugLog(`${method} ${path} -> timeout after ${Date.now() - startedAt}ms (attempt ${attempt}/${MAX_RETRIES})`);
           if (attempt < MAX_RETRIES) {
             console.error(`[yookassa-mcp] Timeout ${path}, retry (${attempt}/${MAX_RETRIES})`);
             continue;
