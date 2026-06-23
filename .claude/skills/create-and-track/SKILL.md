@@ -2,9 +2,6 @@
 name: create-and-track
 description: Создать платёж в ЮKassa и показать ссылку для оплаты. Использует create_payment и get_payment
 argument-hint: <сумма> "<описание>"
-allowed-tools:
-  - Bash
-  - Read
 ---
 
 # /create-and-track — Создать и отследить платёж
