@@ -64,6 +64,9 @@ export async function handleCreateReceipt(params: z.infer<typeof createReceiptSc
 
   // Standalone POST /receipts requires `settlements` and `send`. If settlements are not
   // supplied, build a single cashless settlement summing the item line totals.
+  // Auto settlement = sum of line totals. Unit price is exact integer kopecks; for a
+  // fractional quantity the per-line product is rounded to the nearest kopeck (settlements
+  // are informational metadata on the receipt, not the charged transaction amount).
   const settlements = params.settlements
     ? params.settlements.map(s => ({ type: s.type, amount: formatAmount(s.amount) }))
     : [{

@@ -211,7 +211,7 @@ export async function handleCreateSplitPayment(params: z.infer<typeof createSpli
   const sumK = params.transfers.reduce((s, t) => s + toKopecks(t.amount), 0);
   if (sumK !== totalK) {
     throw new Error(
-      `The sum of transfers (${formatKopecks(sumK).value}) must equal the total payment amount (${formatKopecks(totalK).value}).`
+      `The sum of transfers (${formatKopecks(sumK, params.currency).value}) must equal the total payment amount (${formatKopecks(totalK, params.currency).value}).`
     );
   }
 

@@ -185,6 +185,17 @@ describe("payouts", () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
+  it("rejects a payout with BOTH payout_token and a destination (mutually exclusive)", async () => {
+    await expect(handleCreatePayout({
+      amount: 100,
+      currency: "RUB",
+      payout_token: "tok_1",
+      destination_type: "bank_card",
+      destination_value: "4111111111111111",
+    })).rejects.toThrow(/mutually exclusive/);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
   it("gets a payout", async () => {
     mockFetch.mockResolvedValueOnce(mockOk({ id: "po_1", status: "succeeded" }));
     const result = JSON.parse(await handleGetPayout({ payout_id: "po_1" }));

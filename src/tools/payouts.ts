@@ -21,6 +21,12 @@ export async function handleCreatePayout(params: z.infer<typeof createPayoutSche
     amount: formatAmount(params.amount, params.currency),
   };
 
+  if (params.payout_token && (params.destination_type || params.destination_value)) {
+    throw new Error(
+      "Provide either payout_token or destination_type/destination_value, not both — they are mutually exclusive."
+    );
+  }
+
   if (params.payout_token) {
     // Tokenized destination from the payout widget (no PCI DSS needed).
     body.payout_token = params.payout_token;
