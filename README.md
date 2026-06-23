@@ -158,7 +158,7 @@ Show all successful payments for the last 7 days and create a refund of 2500 RUB
 
 - **Auth**: HTTP Basic Auth (`YOOKASSA_SHOP_ID:YOOKASSA_SECRET_KEY`)
 - **Base URL**: `https://api.yookassa.ru/v3/`
-- **Idempotence-Key**: UUID v4 on every POST request
+- **Idempotence-Key**: one stable UUID v4 per logical POST/DELETE request, preserved across retries (a retried request is de-duplicated by YooKassa, never double-charged). Callers may pass an explicit key.
 - **Timeout**: 10 seconds
 - **Retry**: 3 attempts on 429/5xx with exponential backoff (1s, 2s, 4s)
 - **Transport**: stdio (default) or Streamable HTTP (`--http` / `HTTP_PORT`)

@@ -38,16 +38,24 @@ export class YooKassaClient {
     return this.request("GET", path);
   }
 
-  async post(path: string, body?: unknown): Promise<unknown> {
-    return this.request("POST", path, body);
+  async post(path: string, body?: unknown, idempotencyKey?: string): Promise<unknown> {
+    return this.request("POST", path, body, idempotencyKey);
   }
 
-  async delete(path: string): Promise<unknown> {
-    return this.request("DELETE", path);
+  async delete(path: string, idempotencyKey?: string): Promise<unknown> {
+    return this.request("DELETE", path, undefined, idempotencyKey);
   }
 
-  private async request(method: string, path: string, body?: unknown): Promise<unknown> {
+  private async request(method: string, path: string, body?: unknown, idempotencyKey?: string): Promise<unknown> {
     const url = `${BASE_URL}${path}`;
+
+    // The Idempotence-Key is generated ONCE per logical operation and reused on every
+    // retry attempt. YooKassa treats a retry carrying the same body but a DIFFERENT key
+    // as a brand-new request ("если данные в запросе те же, а ключ идемпотентности
+    // отличается, запрос выполняется как новый") — regenerating it per attempt would
+    // duplicate a payment/refund/payout. Required for POST and DELETE.
+    const needsKey = method === "POST" || method === "DELETE";
+    const key = needsKey ? (idempotencyKey ?? crypto.randomUUID()) : undefined;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       const controller = new AbortController();
@@ -58,8 +66,8 @@ export class YooKassaClient {
         "Content-Type": "application/json",
       };
 
-      if (method === "POST") {
-        headers["Idempotence-Key"] = crypto.randomUUID();
+      if (key) {
+        headers["Idempotence-Key"] = key;
       }
 
       try {

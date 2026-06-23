@@ -91,6 +91,51 @@ describe("HTTP calls with mocked fetch", () => {
     expect(key1).not.toBe(key2);
   });
 
+  it("reuses the SAME Idempotence-Key across retries of one POST (no duplicate charge)", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(globalThis, "fetch")
+        .mockResolvedValueOnce(new Response("server error", { status: 500 }))
+        .mockResolvedValueOnce(new Response(JSON.stringify({ id: "pay_1" }), { status: 200 }));
+
+      const promise = client.post("/payments", { amount: { value: "100.00", currency: "RUB" } });
+      await vi.runAllTimersAsync();
+      await promise;
+
+      expect(fetch).toHaveBeenCalledTimes(2);
+      const key1 = (vi.mocked(fetch).mock.calls[0][1]?.headers as Record<string, string>)["Idempotence-Key"];
+      const key2 = (vi.mocked(fetch).mock.calls[1][1]?.headers as Record<string, string>)["Idempotence-Key"];
+      expect(key1).toBeDefined();
+      expect(key1).toBe(key2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("honors an explicit Idempotence-Key passed to post()", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ id: "pay_1" }), { status: 200 }),
+    );
+
+    await client.post("/payments", {}, "my-stable-key");
+
+    const headers = vi.mocked(fetch).mock.calls[0][1]?.headers as Record<string, string>;
+    expect(headers["Idempotence-Key"]).toBe("my-stable-key");
+  });
+
+  it("sends an Idempotence-Key on DELETE requests", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(null, { status: 204 }),
+    );
+
+    await client.delete("/webhooks/wh_1");
+
+    const headers = vi.mocked(fetch).mock.calls[0][1]?.headers as Record<string, string>;
+    expect(headers["Idempotence-Key"]).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
+  });
+
   it("handles 401 error", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
       new Response(JSON.stringify({
