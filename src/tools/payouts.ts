@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { getClient, formatAmount } from "../client.js";
+import { getClient, formatAmount, moneyAmount } from "../client.js";
 
 export const createPayoutSchema = z.object({
-  amount: z.number().positive().describe("Сумма выплаты"),
+  amount: moneyAmount.describe("Сумма выплаты"),
   currency: z.string().default("RUB").describe("Валюта"),
   destination_type: z.enum(["bank_card", "yoo_money", "sbp"]).describe("Тип получателя выплаты"),
   destination_value: z.string().describe("Реквизит получателя: номер карты (bank_card), номер кошелька (yoo_money) или телефон в формате 79XXXXXXXXX (sbp)"),

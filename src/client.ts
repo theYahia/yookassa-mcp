@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { YooKassaError } from "./types.js";
 
 const BASE_URL = "https://api.yookassa.ru/v3";
@@ -157,7 +158,29 @@ export class YooKassaClient {
   }
 }
 
-/** Convert number to YooKassa amount format: 100 -> "100.00" */
-export function formatAmount(amount: number, currency = "RUB"): { value: string; currency: string } {
-  return { value: amount.toFixed(2), currency };
+/**
+ * Money input for a tool schema: a 2-decimal string ("100", "99.50") — exact, the
+ * recommended form — or a positive number (converted via integer kopecks, which avoids
+ * most float artifacts but cannot represent every decimal exactly).
+ */
+export const moneyAmount = z.union([
+  z.string().regex(/^\d+(\.\d{1,2})?$/, "Сумма в формате '100' или '100.50' (до 2 знаков)"),
+  z.number().positive(),
+]);
+
+/** Amount as integer kopecks, without lossy float arithmetic where possible. */
+export function toKopecks(value: string | number): number {
+  if (typeof value === "string") {
+    const [whole, frac = ""] = value.split(".");
+    return parseInt(whole, 10) * 100 + parseInt(((frac + "00").slice(0, 2)) || "0", 10);
+  }
+  return Math.round(value * 100);
+}
+
+/** Convert a money value to YooKassa amount format: 100 / "100" -> "100.00". */
+export function formatAmount(value: string | number, currency = "RUB"): { value: string; currency: string } {
+  const kopecks = toKopecks(value);
+  const whole = Math.floor(kopecks / 100);
+  const frac = Math.abs(kopecks % 100);
+  return { value: `${whole}.${String(frac).padStart(2, "0")}`, currency };
 }

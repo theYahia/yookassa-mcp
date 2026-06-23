@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { getClient, formatAmount } from "../client.js";
+import { getClient, formatAmount, moneyAmount } from "../client.js";
 
 export const createRefundSchema = z.object({
   payment_id: z.string().describe("ID платежа для возврата"),
-  amount: z.number().positive().describe("Сумма возврата в рублях"),
+  amount: moneyAmount.describe("Сумма возврата в рублях"),
   description: z.string().optional().describe("Причина возврата"),
 });
 

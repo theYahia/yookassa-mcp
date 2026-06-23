@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { getClient, formatAmount } from "../client.js";
+import { getClient, formatAmount, moneyAmount } from "../client.js";
 
 // --- Schemas ---
 
 export const createPaymentSchema = z.object({
-  amount: z.number().positive().describe("Сумма платежа в рублях"),
+  amount: moneyAmount.describe("Сумма платежа в рублях (строка '5000.00' — точно, или число)"),
   currency: z.string().default("RUB").describe("Валюта (по умолчанию RUB)"),
   description: z.string().max(128).describe("Описание платежа (макс 128 символов)"),
   capture: z.boolean().default(true).describe("true = одностадийный, false = холдирование"),
@@ -18,7 +18,7 @@ export const createPaymentSchema = z.object({
   receipt_items: z.array(z.object({
     description: z.string().describe("Название товара/услуги"),
     quantity: z.number().positive().describe("Количество"),
-    amount: z.number().positive().describe("Цена за единицу"),
+    amount: moneyAmount.describe("Цена за единицу"),
     vat_code: z.number().int().min(1).max(6).describe("Код НДС: 1=без, 2=0%, 3=10%, 4=20%, 5=10/110, 6=20/120"),
   })).optional().describe("Товары для чека 54-ФЗ (если нужен чек при создании платежа)"),
 });
@@ -29,7 +29,7 @@ export const getPaymentSchema = z.object({
 
 export const capturePaymentSchema = z.object({
   payment_id: z.string().describe("ID платежа для подтверждения"),
-  amount: z.number().positive().optional().describe("Сумма для частичного подтверждения (опционально)"),
+  amount: moneyAmount.optional().describe("Сумма для частичного подтверждения (опционально)"),
 });
 
 export const cancelPaymentSchema = z.object({
@@ -45,7 +45,7 @@ export const listPaymentsSchema = z.object({
 });
 
 export const savePaymentMethodSchema = z.object({
-  amount: z.number().positive().describe("Сумма для привязки (минимум 1 рубль, спишется и вернётся)"),
+  amount: moneyAmount.describe("Сумма для привязки (минимум 1 рубль, спишется и вернётся)"),
   currency: z.string().default("RUB").describe("Валюта"),
   description: z.string().default("Привязка карты").describe("Описание"),
   return_url: z.string().url().describe("URL возврата после привязки"),
@@ -54,26 +54,26 @@ export const savePaymentMethodSchema = z.object({
 
 export const createRecurringPaymentSchema = z.object({
   payment_method_id: z.string().describe("ID сохранённого метода оплаты (из payment_method.id)"),
-  amount: z.number().positive().describe("Сумма рекуррентного платежа"),
+  amount: moneyAmount.describe("Сумма рекуррентного платежа"),
   currency: z.string().default("RUB").describe("Валюта"),
   description: z.string().max(128).describe("Описание рекуррентного платежа"),
 });
 
 export const createSbpPaymentSchema = z.object({
-  amount: z.number().positive().describe("Сумма платежа через СБП"),
+  amount: moneyAmount.describe("Сумма платежа через СБП"),
   currency: z.string().default("RUB").describe("Валюта"),
   description: z.string().max(128).describe("Описание платежа"),
   return_url: z.string().url().optional().describe("URL возврата"),
 });
 
 export const createSplitPaymentSchema = z.object({
-  amount: z.number().positive().describe("Общая сумма платежа"),
+  amount: moneyAmount.describe("Общая сумма платежа"),
   currency: z.string().default("RUB").describe("Валюта"),
   description: z.string().max(128).describe("Описание платежа"),
   return_url: z.string().url().optional().describe("URL возврата"),
   transfers: z.array(z.object({
     account_id: z.string().describe("ID получателя (shopId партнёра)"),
-    amount: z.number().positive().describe("Сумма для этого получателя"),
+    amount: moneyAmount.describe("Сумма для этого получателя"),
     description: z.string().optional().describe("Описание перевода"),
   })).min(1).describe("Массив получателей (splits) для маркетплейса"),
 });

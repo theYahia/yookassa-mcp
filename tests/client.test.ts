@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { YooKassaClient, formatAmount, resetClient } from "../src/client.js";
+import { YooKassaClient, formatAmount, toKopecks, moneyAmount, resetClient } from "../src/client.js";
 
 describe("YooKassaClient", () => {
   beforeEach(() => {
@@ -35,6 +35,39 @@ describe("formatAmount", () => {
 
   it("uses custom currency", () => {
     expect(formatAmount(50, "USD")).toEqual({ value: "50.00", currency: "USD" });
+  });
+
+  it("formats string amounts exactly (no float)", () => {
+    expect(formatAmount("100")).toEqual({ value: "100.00", currency: "RUB" });
+    expect(formatAmount("99.5")).toEqual({ value: "99.50", currency: "RUB" });
+    expect(formatAmount("99.99")).toEqual({ value: "99.99", currency: "RUB" });
+    expect(formatAmount("0.01")).toEqual({ value: "0.01", currency: "RUB" });
+  });
+
+  it("formats number amounts via integer kopecks", () => {
+    expect(formatAmount(2500.5)).toEqual({ value: "2500.50", currency: "RUB" });
+    expect(formatAmount(7000)).toEqual({ value: "7000.00", currency: "RUB" });
+  });
+
+  it("toKopecks is exact for strings", () => {
+    expect(toKopecks("100")).toBe(10000);
+    expect(toKopecks("99.99")).toBe(9999);
+    expect(toKopecks("0.5")).toBe(50);
+    expect(toKopecks(123.45)).toBe(12345);
+  });
+});
+
+describe("moneyAmount schema", () => {
+  it("accepts a 2-decimal string and a positive number", () => {
+    expect(moneyAmount.safeParse("100.00").success).toBe(true);
+    expect(moneyAmount.safeParse("100").success).toBe(true);
+    expect(moneyAmount.safeParse(5000).success).toBe(true);
+  });
+
+  it("rejects 3 decimals, negatives, and non-numeric strings", () => {
+    expect(moneyAmount.safeParse("100.999").success).toBe(false);
+    expect(moneyAmount.safeParse(-5).success).toBe(false);
+    expect(moneyAmount.safeParse("abc").success).toBe(false);
   });
 });
 

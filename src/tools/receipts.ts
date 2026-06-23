@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getClient, formatAmount } from "../client.js";
+import { getClient, formatAmount, moneyAmount } from "../client.js";
 
 export const createReceiptSchema = z.object({
   type: z.enum(["payment", "refund"]).describe("Тип чека"),
@@ -10,7 +10,7 @@ export const createReceiptSchema = z.object({
   items: z.array(z.object({
     description: z.string().describe("Название товара/услуги"),
     quantity: z.number().positive().describe("Количество"),
-    amount: z.number().positive().describe("Цена за единицу в рублях"),
+    amount: moneyAmount.describe("Цена за единицу в рублях"),
     vat_code: z.number().int().min(1).max(6).describe(
       "Код НДС: 1=без НДС, 2=0%, 3=10%, 4=20%, 5=расчётная 10/110, 6=расчётная 20/120"
     ),
