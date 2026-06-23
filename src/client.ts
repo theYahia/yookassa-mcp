@@ -57,8 +57,8 @@ export class YooKassaClient {
 
     if (!sid || !key) {
       throw new Error(
-        "Переменные окружения YOOKASSA_SHOP_ID и YOOKASSA_SECRET_KEY обязательны. " +
-        "Получите их в личном кабинете ЮKassa: Интеграция -> Ключи API"
+        "Environment variables YOOKASSA_SHOP_ID and YOOKASSA_SECRET_KEY are required. " +
+        "Get them in the YooKassa dashboard: Integration -> API Keys"
       );
     }
 
@@ -183,12 +183,12 @@ export class YooKassaClient {
  * most float artifacts but cannot represent every decimal exactly).
  */
 export const moneyAmount = z.union([
-  z.string().regex(/^\d+(\.\d{1,2})?$/, "Сумма в формате '100' или '100.50' (до 2 знаков)"),
+  z.string().regex(/^\d+(\.\d{1,2})?$/, "Amount as '100' or '100.50' (up to 2 decimals)"),
   z.number().positive(),
 ]);
 
 /** ISO-4217 currency code (uppercase, 3 letters), default RUB. Rejects typos like 'rub'/'руб'. */
-export const currencyCode = z.string().regex(/^[A-Z]{3}$/, "Валюта в формате ISO-4217, заглавными (например RUB, USD)").default("RUB");
+export const currencyCode = z.string().regex(/^[A-Z]{3}$/, "Currency as an uppercase ISO-4217 code (e.g. RUB, USD)").default("RUB");
 
 /** Amount as integer kopecks, without lossy float arithmetic where possible. */
 export function toKopecks(value: string | number): number {

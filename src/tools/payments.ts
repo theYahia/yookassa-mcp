@@ -5,87 +5,87 @@ import { buildReceiptItems } from "./receipts.js";
 // --- Schemas ---
 
 export const createPaymentSchema = z.object({
-  amount: moneyAmount.describe("Сумма платежа в рублях (строка '5000.00' — точно, или число)"),
-  currency: currencyCode.describe("Валюта (ISO-4217, по умолчанию RUB)"),
-  description: z.string().max(128).describe("Описание платежа (макс 128 символов)"),
-  capture: z.boolean().default(true).describe("true = одностадийный, false = холдирование"),
-  confirmation_type: z.enum(["redirect", "embedded", "qr"]).default("redirect").describe("Тип подтверждения оплаты: redirect (нужен return_url), embedded (виджет) или qr"),
-  return_url: z.string().url().optional().describe("URL возврата покупателя после оплаты — ОБЯЗАТЕЛЕН при confirmation_type=redirect"),
+  amount: moneyAmount.describe("Payment amount in rubles (string '5000.00' for exactness, or a number)"),
+  currency: currencyCode.describe("Currency (ISO-4217, default RUB)"),
+  description: z.string().max(128).describe("Payment description (max 128 chars)"),
+  capture: z.boolean().default(true).describe("true = one-step (auto-capture), false = two-step (hold)"),
+  confirmation_type: z.enum(["redirect", "embedded", "qr"]).default("redirect").describe("Confirmation type: redirect (needs return_url), embedded (widget), or qr"),
+  return_url: z.string().url().optional().describe("URL to return the payer to after payment — REQUIRED when confirmation_type=redirect"),
   payment_method_type: z.enum([
     "bank_card", "sbp", "yoo_money", "sberbank", "tinkoff_bank",
     "mobile_balance", "cash", "installments"
-  ]).optional().describe("Способ оплаты"),
-  metadata: z.record(z.string()).optional().describe("Произвольные метаданные (ключ-значение)"),
-  receipt_email: z.string().email().optional().describe("Email покупателя для чека"),
-  receipt_tax_system_code: z.number().int().min(1).max(6).optional().describe("Система налогообложения для чека, тег 1055 (только если несколько СНО / ФФД 1.2)"),
+  ]).optional().describe("Payment method"),
+  metadata: z.record(z.string()).optional().describe("Arbitrary metadata (key-value)"),
+  receipt_email: z.string().email().optional().describe("Customer email for the receipt"),
+  receipt_tax_system_code: z.number().int().min(1).max(6).optional().describe("Receipt tax system code, tag 1055 (only if the shop has multiple tax systems / FFD 1.2)"),
   receipt_items: z.array(z.object({
-    description: z.string().describe("Название товара/услуги"),
-    quantity: z.number().positive().describe("Количество"),
-    amount: moneyAmount.describe("Цена за единицу"),
-    vat_code: z.number().int().min(1).max(6).describe("Код НДС: 1=без, 2=0%, 3=10%, 4=20%, 5=10/110, 6=20/120"),
-    payment_subject: z.string().optional().describe("Признак предмета расчёта, тег 1212 (по умолчанию 'commodity')"),
-    payment_mode: z.string().optional().describe("Признак способа расчёта, тег 1214 (по умолчанию 'full_payment')"),
-    measure: z.string().optional().describe("Мера количества, тег 2108 (по умолчанию 'piece'; нужна для ФФД 1.2)"),
-  })).optional().describe("Товары для чека 54-ФЗ (если нужен чек при создании платежа)"),
+    description: z.string().describe("Item/service name"),
+    quantity: z.number().positive().describe("Quantity"),
+    amount: moneyAmount.describe("Unit price"),
+    vat_code: z.number().int().min(1).max(6).describe("VAT code: 1=no VAT, 2=0%, 3=10%, 4=20%, 5=10/110, 6=20/120"),
+    payment_subject: z.string().optional().describe("Payment subject, tag 1212 (default 'commodity')"),
+    payment_mode: z.string().optional().describe("Payment mode, tag 1214 (default 'full_payment')"),
+    measure: z.string().optional().describe("Measure, tag 2108 (default 'piece'; required for FFD 1.2)"),
+  })).optional().describe("Items for a 54-FZ receipt (if issuing a receipt with the payment)"),
 });
 
 export const getPaymentSchema = z.object({
-  payment_id: z.string().describe("ID платежа (например pay_xxx)"),
+  payment_id: z.string().describe("Payment ID (e.g. pay_xxx)"),
 });
 
 export const capturePaymentSchema = z.object({
-  payment_id: z.string().describe("ID платежа для подтверждения"),
-  amount: moneyAmount.optional().describe("Сумма для частичного подтверждения (опционально; не больше суммы холдирования, та же валюта). Превышение отклонит ЮKassa"),
+  payment_id: z.string().describe("ID of the payment to capture"),
+  amount: moneyAmount.optional().describe("Amount for a partial capture (optional; must be <= the authorized amount, same currency). Over-capture is rejected by YooKassa"),
 });
 
 export const cancelPaymentSchema = z.object({
-  payment_id: z.string().describe("ID платежа для отмены"),
+  payment_id: z.string().describe("ID of the payment to cancel"),
 });
 
 export const listPaymentsSchema = z.object({
-  limit: z.number().int().min(1).max(100).default(10).describe("Количество (1-100, по умолчанию 10)"),
-  status: z.enum(["pending", "waiting_for_capture", "succeeded", "canceled"]).optional().describe("Фильтр по статусу"),
-  created_at_gte: z.string().optional().describe("От даты (ISO datetime)"),
-  created_at_lte: z.string().optional().describe("До даты (ISO datetime)"),
-  cursor: z.string().optional().describe("Курсор для пагинации (из next_cursor предыдущего ответа)"),
+  limit: z.number().int().min(1).max(100).default(10).describe("Count (1-100, default 10)"),
+  status: z.enum(["pending", "waiting_for_capture", "succeeded", "canceled"]).optional().describe("Filter by status"),
+  created_at_gte: z.string().optional().describe("From date (ISO-8601 datetime)"),
+  created_at_lte: z.string().optional().describe("To date (ISO-8601 datetime)"),
+  cursor: z.string().optional().describe("Pagination cursor (from next_cursor of the previous response)"),
 });
 
 export const savePaymentMethodSchema = z.object({
-  amount: moneyAmount.describe("Сумма для привязки (минимум 1 рубль, спишется и вернётся)"),
-  currency: currencyCode.describe("Валюта (ISO-4217, по умолчанию RUB)"),
-  description: z.string().default("Привязка карты").describe("Описание"),
-  return_url: z.string().url().describe("URL возврата после привязки"),
-  payment_method_type: z.enum(["bank_card", "yoo_money", "sberbank"]).default("bank_card").describe("Тип метода оплаты"),
+  amount: moneyAmount.describe("Binding amount (min 1 ruble; charged then refundable)"),
+  currency: currencyCode.describe("Currency (ISO-4217, default RUB)"),
+  description: z.string().default("Card binding").describe("Description"),
+  return_url: z.string().url().describe("URL to return to after binding"),
+  payment_method_type: z.enum(["bank_card", "yoo_money", "sberbank"]).default("bank_card").describe("Payment method type"),
 });
 
 export const createRecurringPaymentSchema = z.object({
-  payment_method_id: z.string().describe("ID сохранённого метода оплаты (из payment_method.id)"),
-  amount: moneyAmount.describe("Сумма рекуррентного платежа"),
-  currency: currencyCode.describe("Валюта (ISO-4217, по умолчанию RUB)"),
-  description: z.string().max(128).describe("Описание рекуррентного платежа"),
+  payment_method_id: z.string().describe("ID of the saved payment method (from payment_method.id)"),
+  amount: moneyAmount.describe("Recurring charge amount"),
+  currency: currencyCode.describe("Currency (ISO-4217, default RUB)"),
+  description: z.string().max(128).describe("Recurring payment description"),
 });
 
 export const createSbpPaymentSchema = z.object({
-  amount: moneyAmount.describe("Сумма платежа через СБП"),
-  currency: currencyCode.describe("Валюта (ISO-4217, по умолчанию RUB)"),
-  description: z.string().max(128).describe("Описание платежа"),
-  confirmation_type: z.enum(["redirect", "embedded", "qr"]).default("redirect").describe("Тип подтверждения: redirect (нужен return_url), embedded или qr"),
-  return_url: z.string().url().optional().describe("URL возврата — ОБЯЗАТЕЛЕН при confirmation_type=redirect"),
+  amount: moneyAmount.describe("SBP payment amount"),
+  currency: currencyCode.describe("Currency (ISO-4217, default RUB)"),
+  description: z.string().max(128).describe("Payment description"),
+  confirmation_type: z.enum(["redirect", "embedded", "qr"]).default("redirect").describe("Confirmation type: redirect (needs return_url), embedded, or qr"),
+  return_url: z.string().url().optional().describe("Return URL — REQUIRED when confirmation_type=redirect"),
 });
 
 export const createSplitPaymentSchema = z.object({
-  amount: moneyAmount.describe("Общая сумма платежа"),
-  currency: currencyCode.describe("Валюта (ISO-4217, по умолчанию RUB)"),
-  description: z.string().max(128).describe("Описание платежа"),
-  confirmation_type: z.enum(["redirect", "embedded", "qr"]).default("redirect").describe("Тип подтверждения: redirect (нужен return_url), embedded или qr"),
-  return_url: z.string().url().optional().describe("URL возврата — ОБЯЗАТЕЛЕН при confirmation_type=redirect"),
+  amount: moneyAmount.describe("Total payment amount"),
+  currency: currencyCode.describe("Currency (ISO-4217, default RUB)"),
+  description: z.string().max(128).describe("Payment description"),
+  confirmation_type: z.enum(["redirect", "embedded", "qr"]).default("redirect").describe("Confirmation type: redirect (needs return_url), embedded, or qr"),
+  return_url: z.string().url().optional().describe("Return URL — REQUIRED when confirmation_type=redirect"),
   transfers: z.array(z.object({
-    account_id: z.string().describe("ID получателя (shopId партнёра, подключённого к платформе)"),
-    amount: moneyAmount.describe("Сумма для этого получателя"),
-    platform_fee_amount: moneyAmount.optional().describe("Комиссия платформы, удерживаемая с этого перевода (тег API platform_fee_amount)"),
-    description: z.string().optional().describe("Описание перевода"),
-    metadata: z.record(z.string()).optional().describe("Метаданные перевода"),
-  })).min(1).describe("Массив получателей (splits). Сумма переводов должна равняться amount. Требует продукт «Сплитование платежей»"),
+    account_id: z.string().describe("Recipient ID (partner shopId connected to the platform)"),
+    amount: moneyAmount.describe("Amount for this recipient"),
+    platform_fee_amount: moneyAmount.optional().describe("Platform commission withheld from this transfer (API field platform_fee_amount)"),
+    description: z.string().optional().describe("Transfer description"),
+    metadata: z.record(z.string()).optional().describe("Transfer metadata"),
+  })).min(1).describe("Recipients (splits). The sum of transfers must equal amount. Requires the Split Payments product"),
 });
 
 // --- Handlers ---
@@ -102,8 +102,8 @@ function buildConfirmation(type: "redirect" | "embedded" | "qr", returnUrl?: str
   }
   if (!returnUrl) {
     throw new Error(
-      "return_url обязателен при confirmation_type=redirect (URL, на который ЮKassa вернёт покупателя после оплаты). " +
-      "Передайте реальный return_url или выберите confirmation_type=embedded/qr."
+      "return_url is required when confirmation_type=redirect (the URL YooKassa returns the payer to after payment). " +
+      "Pass a real return_url or choose confirmation_type=embedded/qr."
     );
   }
   return { type: "redirect", return_url: returnUrl };
@@ -211,7 +211,7 @@ export async function handleCreateSplitPayment(params: z.infer<typeof createSpli
   const sumK = params.transfers.reduce((s, t) => s + toKopecks(t.amount), 0);
   if (sumK !== totalK) {
     throw new Error(
-      `Сумма переводов (${formatKopecks(sumK).value}) должна равняться общей сумме платежа (${formatKopecks(totalK).value}).`
+      `The sum of transfers (${formatKopecks(sumK).value}) must equal the total payment amount (${formatKopecks(totalK).value}).`
     );
   }
 

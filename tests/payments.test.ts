@@ -310,7 +310,7 @@ describe("create_split_payment", () => {
         { account_id: "shop_1", amount: 7000 },
         { account_id: "shop_2", amount: 2000 },
       ],
-    })).rejects.toThrow(/Сумма переводов/);
+    })).rejects.toThrow(/sum of transfers/);
     expect(mockFetch).not.toHaveBeenCalled();
   });
 });

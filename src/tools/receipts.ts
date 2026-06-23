@@ -2,39 +2,39 @@ import { z } from "zod";
 import { getClient, formatAmount, formatKopecks, moneyAmount, toKopecks } from "../client.js";
 
 export const receiptItemSchema = z.object({
-  description: z.string().describe("Название товара/услуги"),
-  quantity: z.number().positive().describe("Количество"),
-  amount: moneyAmount.describe("Цена за единицу в рублях"),
+  description: z.string().describe("Item/service name"),
+  quantity: z.number().positive().describe("Quantity"),
+  amount: moneyAmount.describe("Unit price in rubles"),
   vat_code: z.number().int().min(1).max(6).describe(
-    "Код НДС: 1=без НДС, 2=0%, 3=10%, 4=20%, 5=расчётная 10/110, 6=расчётная 20/120"
+    "VAT code: 1=no VAT, 2=0%, 3=10%, 4=20%, 5=computed 10/110, 6=computed 20/120"
   ),
   payment_subject: z.string().optional().describe(
-    "Признак предмета расчёта, тег 1212 (по умолчанию 'commodity'; для услуг — 'service')"
+    "Payment subject, tag 1212 (default 'commodity'; 'service' for services)"
   ),
   payment_mode: z.string().optional().describe(
-    "Признак способа расчёта, тег 1214 (по умолчанию 'full_payment')"
+    "Payment mode, tag 1214 (default 'full_payment')"
   ),
   measure: z.string().optional().describe(
-    "Мера количества, тег 2108 (по умолчанию 'piece'; обязательна для ФФД 1.2 и Чеков от ЮKassa)"
+    "Measure, tag 2108 (default 'piece'; required for FFD 1.2 and Receipts-from-YooMoney)"
   ),
 });
 
 export const createReceiptSchema = z.object({
-  type: z.enum(["payment", "refund"]).describe("Тип чека"),
-  payment_id: z.string().optional().describe("ID платежа (обязателен для type=payment)"),
-  refund_id: z.string().optional().describe("ID возврата (обязателен для type=refund)"),
-  customer_email: z.string().email().optional().describe("Email покупателя для чека"),
-  customer_phone: z.string().optional().describe("Телефон покупателя (если нет email)"),
+  type: z.enum(["payment", "refund"]).describe("Receipt type"),
+  payment_id: z.string().optional().describe("Payment ID (required for type=payment)"),
+  refund_id: z.string().optional().describe("Refund ID (required for type=refund)"),
+  customer_email: z.string().email().optional().describe("Customer email for the receipt"),
+  customer_phone: z.string().optional().describe("Customer phone (if no email)"),
   tax_system_code: z.number().int().min(1).max(6).optional().describe(
-    "Система налогообложения, тег 1055 (1-6). Передавайте только если у магазина несколько СНО или ФФД 1.2"
+    "Tax system code, tag 1055 (1-6). Send only if the shop has multiple tax systems or uses FFD 1.2"
   ),
-  items: z.array(receiptItemSchema).min(1).describe("Товары/услуги в чеке"),
+  items: z.array(receiptItemSchema).min(1).describe("Receipt items/services"),
   settlements: z.array(z.object({
-    type: z.string().describe("Тип расчёта: cashless, prepayment, postpayment, consideration"),
-    amount: moneyAmount.describe("Сумма расчёта"),
-  })).optional().describe("Расчёты (settlements). Если не указано — авто: один 'cashless' на сумму позиций"),
-  send: z.boolean().default(true).describe("Отправить чек покупателю (обязательно для отдельного чека)"),
-  settlement_id: z.string().optional().describe("ID расчёта (для связки)"),
+    type: z.string().describe("Settlement type: cashless, prepayment, postpayment, consideration"),
+    amount: moneyAmount.describe("Settlement amount"),
+  })).optional().describe("Settlements. If omitted — auto: one 'cashless' for the sum of items"),
+  send: z.boolean().default(true).describe("Send the receipt to the customer (required for a standalone receipt)"),
+  settlement_id: z.string().optional().describe("Settlement ID (for linking)"),
 });
 
 /** Build the receipt `items` array with 54-FZ fiscal attributes (defaults applied). */
@@ -51,10 +51,10 @@ export function buildReceiptItems(items: z.infer<typeof receiptItemSchema>[], cu
 }
 
 export const listReceiptsSchema = z.object({
-  payment_id: z.string().optional().describe("Фильтр по ID платежа"),
-  refund_id: z.string().optional().describe("Фильтр по ID возврата"),
-  limit: z.number().int().min(1).max(100).default(10).describe("Количество (1-100)"),
-  cursor: z.string().optional().describe("Курсор пагинации"),
+  payment_id: z.string().optional().describe("Filter by payment ID"),
+  refund_id: z.string().optional().describe("Filter by refund ID"),
+  limit: z.number().int().min(1).max(100).default(10).describe("Count (1-100)"),
+  cursor: z.string().optional().describe("Pagination cursor"),
 });
 
 export async function handleCreateReceipt(params: z.infer<typeof createReceiptSchema>): Promise<string> {
