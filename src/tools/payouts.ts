@@ -5,7 +5,8 @@ export const createPayoutSchema = z.object({
   amount: z.number().positive().describe("Сумма выплаты"),
   currency: z.string().default("RUB").describe("Валюта"),
   destination_type: z.enum(["bank_card", "yoo_money", "sbp"]).describe("Тип получателя выплаты"),
-  destination_value: z.string().describe("Реквизит получателя (номер карты, кошелька или телефон для СБП)"),
+  destination_value: z.string().describe("Реквизит получателя: номер карты (bank_card), номер кошелька (yoo_money) или телефон в формате 79XXXXXXXXX (sbp)"),
+  bank_id: z.string().optional().describe("ID банка-участника СБП (обязателен для destination_type=sbp). См. список участников СБП в API ЮKassa"),
   description: z.string().max(128).optional().describe("Описание выплаты"),
   metadata: z.record(z.string()).optional().describe("Произвольные метаданные"),
 });
@@ -15,16 +16,23 @@ export const getPayoutSchema = z.object({
 });
 
 export async function handleCreatePayout(params: z.infer<typeof createPayoutSchema>): Promise<string> {
-  const destination: Record<string, string> = {
+  const destination: Record<string, unknown> = {
     type: params.destination_type,
   };
 
   if (params.destination_type === "bank_card") {
-    destination.card = JSON.stringify({ number: params.destination_value });
+    // YooKassa expects card as a nested object { number }, NOT a JSON string.
+    destination.card = { number: params.destination_value };
   } else if (params.destination_type === "yoo_money") {
     destination.account_number = params.destination_value;
   } else if (params.destination_type === "sbp") {
+    if (!params.bank_id) {
+      throw new Error(
+        "Для выплаты по СБП обязателен bank_id (ID банка-участника СБП), помимо телефона в destination_value."
+      );
+    }
     destination.phone = params.destination_value;
+    destination.bank_id = params.bank_id;
   }
 
   const body: Record<string, unknown> = {

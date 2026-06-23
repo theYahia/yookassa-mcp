@@ -90,6 +90,48 @@ describe("payouts", () => {
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.amount.value).toBe("5000.00");
     expect(body.payout_destination_data.type).toBe("bank_card");
+    // card must be a nested OBJECT { number }, not a JSON-encoded string
+    expect(body.payout_destination_data.card).toEqual({ number: "4111111111111111" });
+    expect(typeof body.payout_destination_data.card).toBe("object");
+  });
+
+  it("creates a yoo_money payout (account_number, flat)", async () => {
+    mockFetch.mockResolvedValueOnce(mockOk({ id: "po_2", status: "pending" }));
+
+    await handleCreatePayout({
+      amount: 100,
+      currency: "RUB",
+      destination_type: "yoo_money",
+      destination_value: "4100116075156746",
+    });
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.payout_destination_data).toEqual({ type: "yoo_money", account_number: "4100116075156746" });
+  });
+
+  it("creates an SBP payout with phone + bank_id", async () => {
+    mockFetch.mockResolvedValueOnce(mockOk({ id: "po_3", status: "pending" }));
+
+    await handleCreatePayout({
+      amount: 100,
+      currency: "RUB",
+      destination_type: "sbp",
+      destination_value: "79000000000",
+      bank_id: "100000000111",
+    });
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.payout_destination_data).toEqual({ type: "sbp", phone: "79000000000", bank_id: "100000000111" });
+  });
+
+  it("rejects an SBP payout missing bank_id", async () => {
+    await expect(handleCreatePayout({
+      amount: 100,
+      currency: "RUB",
+      destination_type: "sbp",
+      destination_value: "79000000000",
+    })).rejects.toThrow("bank_id");
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it("gets a payout", async () => {
