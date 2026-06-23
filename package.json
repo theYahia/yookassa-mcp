@@ -1,6 +1,6 @@
 {
   "name": "@theyahia/yookassa-mcp",
-  "version": "2.0.1",
+  "version": "3.0.0",
   "description": "MCP server for YooKassa — payment processing, refunds, receipts, webhooks (Russia)",
   "type": "module",
   "main": "dist/index.js",

@@ -100,7 +100,19 @@ Endpoints:
 | `MCP_ALLOWED_ORIGINS` | No | Comma-separated browser `Origin` CORS allowlist (default: none — browser origins rejected) |
 | `YOOKASSA_DEBUG` | No | Set to `1` to trace each request (method/path/status/latency/idempotency-key) to stderr — never logs secrets, the auth header, or request bodies |
 
-For testing, create a demo shop in [YooKassa dashboard](https://yookassa.ru/my/shop-settings).
+## Test mode / safety
+
+This server drives **real money operations**. While developing:
+
+1. Create a **test shop** in the [YooKassa dashboard](https://yookassa.ru/my/shop-settings) and
+   use its `YOOKASSA_SHOP_ID` / `YOOKASSA_SECRET_KEY`.
+2. Confirm you are in test mode by calling **`get_shop_info`** — expect `"test": true` — **before**
+   switching to a live shop.
+3. In a **live** shop, `create_payment`, `create_refund`, `create_payout`, `create_recurring_payment`,
+   `save_payment_method`, and `capture_payment` move real funds and are **irreversible**. These tools
+   are annotated as destructive so MCP clients can prompt before running them.
+4. The HTTP transport is unauthenticated-by-default-refused and binds to localhost — see
+   [SECURITY.md](SECURITY.md) before any remote deployment.
 
 ## Tools (20)
 
