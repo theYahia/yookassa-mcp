@@ -214,6 +214,9 @@ describe("save_payment_method", () => {
     expect(result.payment_method.saved).toBe(true);
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.save_payment_method).toBe(true);
+    expect(body.capture).toBe(true);
+    expect(body.payment_method_data.type).toBe("bank_card");
+    expect(body.confirmation).toEqual({ type: "redirect", return_url: "https://example.com/return" });
   });
 });
 
@@ -232,6 +235,21 @@ describe("create_recurring_payment", () => {
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.payment_method_id).toBe("pm_123");
     expect(body.amount.value).toBe("500.00");
+    expect(body.capture).toBe(true);
+    // Recurring charges are server-side: no confirmation/redirect object
+    expect(body.confirmation).toBeUndefined();
+  });
+
+  it("honors a non-RUB currency", async () => {
+    mockFetch.mockResolvedValueOnce(mockOk({ id: "pay_rec2", status: "succeeded" }));
+    await handleCreateRecurringPayment({
+      payment_method_id: "pm_9",
+      amount: "10.00",
+      currency: "USD",
+      description: "USD sub",
+    });
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.amount).toEqual({ value: "10.00", currency: "USD" });
   });
 });
 

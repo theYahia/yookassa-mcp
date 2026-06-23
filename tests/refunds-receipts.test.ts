@@ -40,6 +40,16 @@ describe("refunds", () => {
     const result = JSON.parse(await handleListRefunds({ limit: 10 }));
     expect(result.items).toHaveLength(1);
   });
+
+  it("surfaces a YooKassa error on a missing refund", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      json: async () => ({}),
+      text: async () => JSON.stringify({ type: "error", id: "e", code: "not_found", description: "Refund not found" }),
+    });
+    await expect(handleGetRefund({ refund_id: "nope" })).rejects.toThrow("Refund not found");
+  });
 });
 
 describe("receipts", () => {

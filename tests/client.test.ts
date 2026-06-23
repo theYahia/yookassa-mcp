@@ -229,6 +229,22 @@ describe("HTTP calls with mocked fetch", () => {
     await expect(client.get("/payments")).rejects.toThrow("HTTP 429");
   });
 
+  it("throws a clear timeout error after exhausting retries on AbortError", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new DOMException("aborted", "AbortError"));
+    await expect(client.get("/payments")).rejects.toThrow("request timeout");
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("includes the offending parameter name in a validation error", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({
+        type: "error", id: "e", code: "invalid_request",
+        description: "Bad value", parameter: "amount",
+      }), { status: 400 }),
+    );
+    await expect(client.get("/payments")).rejects.toThrow("(param: amount)");
+  });
+
   it("sanitizes a non-JSON error body (truncated, not echoed verbatim)", async () => {
     const huge = "<html><body>" + "x".repeat(5000) + "</body></html>";
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(huge, { status: 400 }));
