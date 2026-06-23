@@ -1,19 +1,19 @@
 import { z } from "zod";
-import { getClient, formatAmount } from "../client.js";
+import { getClient, formatAmount, moneyAmount } from "../client.js";
 
 export const createRefundSchema = z.object({
-  payment_id: z.string().describe("ID платежа для возврата"),
-  amount: z.number().positive().describe("Сумма возврата в рублях"),
-  description: z.string().optional().describe("Причина возврата"),
+  payment_id: z.string().describe("ID of the payment to refund"),
+  amount: moneyAmount.describe("Refund amount in rubles"),
+  description: z.string().optional().describe("Refund reason"),
 });
 
 export const getRefundSchema = z.object({
-  refund_id: z.string().describe("ID возврата"),
+  refund_id: z.string().describe("Refund ID"),
 });
 
 export const listRefundsSchema = z.object({
-  payment_id: z.string().optional().describe("Фильтр по ID платежа"),
-  limit: z.number().int().min(1).max(100).default(10).describe("Количество (1-100)"),
+  payment_id: z.string().optional().describe("Filter by payment ID"),
+  limit: z.number().int().min(1).max(100).default(10).describe("Count (1-100)"),
 });
 
 export async function handleCreateRefund(params: z.infer<typeof createRefundSchema>): Promise<string> {

@@ -1,0 +1,26 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.5.1/schema.json",
+	"vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+	"files": {
+		"includes": ["src/**/*.ts", "tests/**/*.ts"]
+	},
+	"formatter": { "enabled": false },
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"preset": "recommended",
+			"suspicious": {
+				"noConsole": {
+					"level": "error",
+					"options": { "allow": ["error", "warn"] }
+				}
+			},
+			"complexity": {
+				"useLiteralKeys": "off"
+			},
+			"style": {
+				"useTemplate": "off"
+			}
+		}
+	}
+}

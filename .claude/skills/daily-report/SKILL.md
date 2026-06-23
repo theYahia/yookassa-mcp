@@ -2,9 +2,6 @@
 name: daily-report
 description: Отчёт по платежам за сегодня — суммы, статусы, итого. Использует list_payments
 argument-hint: "[дата YYYY-MM-DD, по умолчанию сегодня]"
-allowed-tools:
-  - Bash
-  - Read
 ---
 
 # /daily-report — Отчёт по платежам

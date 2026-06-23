@@ -10,14 +10,14 @@ export const createWebhookSchema = z.object({
     "payout.succeeded",
     "payout.canceled",
     "deal.closed",
-  ]).describe("Тип события для уведомления"),
-  url: z.string().url().describe("URL для получения webhook-уведомлений (HTTPS)"),
+  ]).describe("Event type to subscribe to"),
+  url: z.string().url().describe("HTTPS URL to receive webhook notifications"),
 });
 
 export const listWebhooksSchema = z.object({});
 
 export const deleteWebhookSchema = z.object({
-  webhook_id: z.string().describe("ID webhook для удаления"),
+  webhook_id: z.string().describe("ID of the webhook to delete"),
 });
 
 export async function handleCreateWebhook(params: z.infer<typeof createWebhookSchema>): Promise<string> {

@@ -2,16 +2,13 @@
 name: check-account
 description: Проверка статуса магазина ЮKassa — тестовый/боевой, фискализация, ID
 argument-hint: ""
-allowed-tools:
-  - Bash
-  - Read
 ---
 
 # /check-account — Статус магазина
 
 ## Алгоритм
 
-1. Вызови `get_balance`
+1. Вызови `get_shop_info`
 2. Покажи информацию о магазине
 
 ## Формат ответа

@@ -2,9 +2,6 @@
 name: refund-payment
 description: Возврат по платежу — полный или частичный. Проверяет статус перед возвратом
 argument-hint: <payment_id> [сумма]
-allowed-tools:
-  - Bash
-  - Read
 ---
 
 # /refund-payment — Возврат по платежу

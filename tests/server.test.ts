@@ -44,7 +44,7 @@ describe("MCP Server smoke test", () => {
       "get_payment",
       "get_payout",
       "get_refund",
-      "get_shop_balance",
+      "get_shop_info",
       "list_payments",
       "list_receipts",
       "list_refunds",
@@ -58,5 +58,28 @@ describe("MCP Server smoke test", () => {
     for (const tool of result.tools) {
       expect(tool.description).toBeTruthy();
     }
+  });
+
+  it("read tools are annotated readOnly and money tools destructive", async () => {
+    const result = await client.listTools();
+    const byName = Object.fromEntries(result.tools.map((t) => [t.name, t]));
+
+    expect(byName["get_payment"].annotations?.readOnlyHint).toBe(true);
+    expect(byName["list_payments"].annotations?.readOnlyHint).toBe(true);
+    expect(byName["get_shop_info"].annotations?.readOnlyHint).toBe(true);
+
+    expect(byName["create_payment"].annotations?.destructiveHint).toBe(true);
+    expect(byName["create_payout"].annotations?.destructiveHint).toBe(true);
+    expect(byName["create_refund"].annotations?.destructiveHint).toBe(true);
+    expect(byName["create_payment"].annotations?.readOnlyHint).toBe(false);
+  });
+
+  it("payment/refund/payout tools advertise an output schema", async () => {
+    const result = await client.listTools();
+    const byName = Object.fromEntries(result.tools.map((t) => [t.name, t]));
+    expect(byName["create_payment"].outputSchema).toBeDefined();
+    expect(byName["get_payment"].outputSchema).toBeDefined();
+    expect(byName["create_refund"].outputSchema).toBeDefined();
+    expect(byName["get_payout"].outputSchema).toBeDefined();
   });
 });

@@ -65,6 +65,14 @@ describe("Payment schemas", () => {
     expect(result.success).toBe(false);
   });
 
+  it("createPaymentSchema validates currency as ISO-4217 (rejects typos)", () => {
+    expect(createPaymentSchema.safeParse({ amount: 100, description: "x", currency: "USD" }).success).toBe(true);
+    expect(createPaymentSchema.safeParse({ amount: 100, description: "x", currency: "rub" }).success).toBe(false);
+    expect(createPaymentSchema.safeParse({ amount: 100, description: "x", currency: "руб" }).success).toBe(false);
+    const dflt = createPaymentSchema.safeParse({ amount: 100, description: "x" });
+    expect(dflt.success && dflt.data.currency).toBe("RUB");
+  });
+
   it("getPaymentSchema validates payment_id", () => {
     expect(getPaymentSchema.safeParse({ payment_id: "pay_123" }).success).toBe(true);
     expect(getPaymentSchema.safeParse({}).success).toBe(false);
