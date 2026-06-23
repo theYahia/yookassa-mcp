@@ -158,6 +158,23 @@ describe("payouts", () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
+  it("creates a payout with payout_token (no raw card)", async () => {
+    mockFetch.mockResolvedValueOnce(mockOk({ id: "po_4", status: "pending" }));
+    await handleCreatePayout({
+      amount: 100,
+      currency: "RUB",
+      payout_token: "uAFUv0jwtUA_8mMIFeRqzAYw.SC.001",
+    });
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.payout_token).toBe("uAFUv0jwtUA_8mMIFeRqzAYw.SC.001");
+    expect(body.payout_destination_data).toBeUndefined();
+  });
+
+  it("rejects a payout with neither payout_token nor destination", async () => {
+    await expect(handleCreatePayout({ amount: 100, currency: "RUB" })).rejects.toThrow(/payout_token/);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
   it("gets a payout", async () => {
     mockFetch.mockResolvedValueOnce(mockOk({ id: "po_1", status: "succeeded" }));
     const result = JSON.parse(await handleGetPayout({ payout_id: "po_1" }));

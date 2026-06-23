@@ -91,6 +91,8 @@ Endpoints:
 |----------|:--------:|-------------|
 | `YOOKASSA_SHOP_ID` | Yes | Shop ID (Settings -> Shop) |
 | `YOOKASSA_SECRET_KEY` | Yes | Secret key (Integration -> API Keys) |
+| `YOOKASSA_PAYOUT_AGENT_ID` | Payouts | Gateway id (agentId) for the Payouts product (Settings -> Payouts) |
+| `YOOKASSA_PAYOUT_SECRET_KEY` | Payouts | Secret key for the Payouts gateway |
 | `HTTP_PORT` | No | Port for HTTP transport (default 3000); enables `--http` mode |
 | `MCP_AUTH_TOKEN` | HTTP only | **Required in HTTP mode.** Bearer token clients must send on `/mcp` |
 | `HTTP_HOST` | No | Bind address for HTTP mode (default `127.0.0.1`; set `0.0.0.0` to expose — only behind a proxy) |
@@ -133,9 +135,14 @@ For testing, create a demo shop in [YooKassa dashboard](https://yookassa.ru/my/s
 
 ### Payouts (2)
 
+> ⚠️ **Payouts are a separately-activated YooKassa product** with their own gateway
+> credentials (`YOOKASSA_PAYOUT_AGENT_ID` + `YOOKASSA_PAYOUT_SECRET_KEY`), not the shop's
+> payment key. Sending a raw card number requires a PCI DSS certificate — without it, collect
+> the recipient via the payout widget and pass `payout_token`. Payouts are asynchronous (poll `get_payout`).
+
 | Tool | Description |
 |------|-------------|
-| `create_payout` | Payout to bank card, YooMoney wallet, or SBP phone |
+| `create_payout` | Payout to bank card / YooMoney wallet / SBP, or via `payout_token` |
 | `get_payout` | Get payout status and details by ID |
 
 ### Webhooks (3)

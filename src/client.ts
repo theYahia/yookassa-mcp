@@ -17,6 +17,7 @@ function debugLog(message: string): void {
 }
 
 let _instance: YooKassaClient | null = null;
+let _payoutInstance: YooKassaClient | null = null;
 
 /** Lazy singleton -- created on first use so tests can set env vars before import */
 export function getClient(): YooKassaClient {
@@ -24,9 +25,27 @@ export function getClient(): YooKassaClient {
   return _instance;
 }
 
-/** Reset singleton (for tests) */
+/**
+ * Client for the Payouts API. YooKassa Payouts is a separately-activated product that
+ * authenticates with its OWN gateway credentials (agentId + payout secret), distinct from
+ * the shop's payment-acceptance key. If YOOKASSA_PAYOUT_AGENT_ID + YOOKASSA_PAYOUT_SECRET_KEY
+ * are set, they are used; otherwise this falls back to the shop credentials (which will
+ * usually NOT work for payouts — see README/SECURITY).
+ */
+export function getPayoutClient(): YooKassaClient {
+  const agentId = process.env.YOOKASSA_PAYOUT_AGENT_ID;
+  const secret = process.env.YOOKASSA_PAYOUT_SECRET_KEY;
+  if (agentId && secret) {
+    if (!_payoutInstance) _payoutInstance = new YooKassaClient(agentId, secret);
+    return _payoutInstance;
+  }
+  return getClient();
+}
+
+/** Reset singletons (for tests) */
 export function resetClient(): void {
   _instance = null;
+  _payoutInstance = null;
 }
 
 export class YooKassaClient {
