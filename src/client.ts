@@ -177,10 +177,14 @@ export function toKopecks(value: string | number): number {
   return Math.round(value * 100);
 }
 
-/** Convert a money value to YooKassa amount format: 100 / "100" -> "100.00". */
-export function formatAmount(value: string | number, currency = "RUB"): { value: string; currency: string } {
-  const kopecks = toKopecks(value);
+/** Convert integer kopecks to YooKassa amount format: 10000 -> { value: "100.00" }. */
+export function formatKopecks(kopecks: number, currency = "RUB"): { value: string; currency: string } {
   const whole = Math.floor(kopecks / 100);
   const frac = Math.abs(kopecks % 100);
   return { value: `${whole}.${String(frac).padStart(2, "0")}`, currency };
+}
+
+/** Convert a money value to YooKassa amount format: 100 / "100" -> "100.00". */
+export function formatAmount(value: string | number, currency = "RUB"): { value: string; currency: string } {
+  return formatKopecks(toKopecks(value), currency);
 }

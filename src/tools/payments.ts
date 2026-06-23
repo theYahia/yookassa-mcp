@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getClient, formatAmount, moneyAmount } from "../client.js";
+import { buildReceiptItems } from "./receipts.js";
 
 // --- Schemas ---
 
@@ -16,11 +17,15 @@ export const createPaymentSchema = z.object({
   ]).optional().describe("Способ оплаты"),
   metadata: z.record(z.string()).optional().describe("Произвольные метаданные (ключ-значение)"),
   receipt_email: z.string().email().optional().describe("Email покупателя для чека"),
+  receipt_tax_system_code: z.number().int().min(1).max(6).optional().describe("Система налогообложения для чека, тег 1055 (только если несколько СНО / ФФД 1.2)"),
   receipt_items: z.array(z.object({
     description: z.string().describe("Название товара/услуги"),
     quantity: z.number().positive().describe("Количество"),
     amount: moneyAmount.describe("Цена за единицу"),
     vat_code: z.number().int().min(1).max(6).describe("Код НДС: 1=без, 2=0%, 3=10%, 4=20%, 5=10/110, 6=20/120"),
+    payment_subject: z.string().optional().describe("Признак предмета расчёта, тег 1212 (по умолчанию 'commodity')"),
+    payment_mode: z.string().optional().describe("Признак способа расчёта, тег 1214 (по умолчанию 'full_payment')"),
+    measure: z.string().optional().describe("Мера количества, тег 2108 (по умолчанию 'piece'; нужна для ФФД 1.2)"),
   })).optional().describe("Товары для чека 54-ФЗ (если нужен чек при создании платежа)"),
 });
 
@@ -119,15 +124,12 @@ export async function handleCreatePayment(params: z.infer<typeof createPaymentSc
   }
 
   if (params.receipt_email && params.receipt_items) {
-    body.receipt = {
+    const receipt: Record<string, unknown> = {
       customer: { email: params.receipt_email },
-      items: params.receipt_items.map(item => ({
-        description: item.description,
-        quantity: String(item.quantity),
-        amount: formatAmount(item.amount, params.currency),
-        vat_code: item.vat_code,
-      })),
+      items: buildReceiptItems(params.receipt_items, params.currency),
     };
+    if (params.receipt_tax_system_code !== undefined) receipt.tax_system_code = params.receipt_tax_system_code;
+    body.receipt = receipt;
   }
 
   const result = await getClient().post("/payments", body);

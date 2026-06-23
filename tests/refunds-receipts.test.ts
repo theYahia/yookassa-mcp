@@ -50,13 +50,37 @@ describe("receipts", () => {
       type: "payment",
       payment_id: "pay_1",
       customer_email: "buyer@test.com",
-      items: [{ description: "Service", quantity: 1, amount: 1000, vat_code: 4 }],
+      send: true,
+      items: [{ description: "Service", quantity: 2, amount: 1000, vat_code: 4 }],
     }));
 
     expect(result.id).toBe("rc_1");
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.customer.email).toBe("buyer@test.com");
+    expect(body.send).toBe(true);
     expect(body.items[0].amount.value).toBe("1000.00");
+    // 54-FZ fiscal attributes with defaults
+    expect(body.items[0].payment_subject).toBe("commodity");
+    expect(body.items[0].payment_mode).toBe("full_payment");
+    expect(body.items[0].measure).toBe("piece");
+    // settlements auto-computed: 2 x 1000.00 = 2000.00, cashless
+    expect(body.settlements).toEqual([{ type: "cashless", amount: { value: "2000.00", currency: "RUB" } }]);
+  });
+
+  it("honors explicit fiscal attributes and tax_system_code", async () => {
+    mockFetch.mockResolvedValueOnce(mockOk({ id: "rc_2" }));
+    await handleCreateReceipt({
+      type: "payment",
+      payment_id: "pay_2",
+      customer_email: "b@test.com",
+      send: true,
+      tax_system_code: 2,
+      items: [{ description: "Consult", quantity: 1, amount: 5000, vat_code: 1, payment_subject: "service", payment_mode: "full_prepayment", measure: "piece" }],
+    });
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.tax_system_code).toBe(2);
+    expect(body.items[0].payment_subject).toBe("service");
+    expect(body.items[0].payment_mode).toBe("full_prepayment");
   });
 
   it("lists receipts", async () => {
