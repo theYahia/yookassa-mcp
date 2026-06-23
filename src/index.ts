@@ -3,7 +3,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { createServer } from "node:http";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { createServer, type IncomingMessage, type Server } from "node:http";
+import { timingSafeEqual } from "node:crypto";
 import {
   createPaymentSchema, handleCreatePayment,
   getPaymentSchema, handleGetPayment,
@@ -236,12 +239,58 @@ export function createMcpServer(): McpServer {
   return server;
 }
 
-async function startHttpServer(server: McpServer, port: number): Promise<void> {
-  const httpServer = createServer(async (req, res) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Accept, Mcp-Session-Id");
-    res.setHeader("Access-Control-Expose-Headers", "Mcp-Session-Id");
+/** Count the registered tools by introspecting a probe server (keeps /health honest). */
+export async function countRegisteredTools(): Promise<number> {
+  const probe = createMcpServer();
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: "probe", version: "0.0.0" });
+  await Promise.all([probe.connect(serverTransport), client.connect(clientTransport)]);
+  const { tools } = await client.listTools();
+  await client.close();
+  await probe.close();
+  return tools.length;
+}
+
+/** Constant-time Bearer-token check. */
+function isAuthorized(req: IncomingMessage, expectedToken: string): boolean {
+  const header = req.headers["authorization"];
+  if (typeof header !== "string" || !header.startsWith("Bearer ")) return false;
+  const provided = Buffer.from(header.slice("Bearer ".length));
+  const expected = Buffer.from(expectedToken);
+  if (provided.length !== expected.length) return false;
+  return timingSafeEqual(provided, expected);
+}
+
+export interface HttpServerConfig {
+  /** Shared secret required as a Bearer token on /mcp. */
+  authToken: string;
+  /** Host:port values accepted in the Host header (DNS-rebinding protection). */
+  allowedHosts: string[];
+  /** Browser Origins allowed for CORS (empty = reject all browser origins). */
+  allowedOrigins: string[];
+  /** Tool count reported by /health. */
+  toolCount: number;
+}
+
+/**
+ * Build the HTTP server (without listening) so it can be unit-tested.
+ *
+ * Security posture for a money-moving server:
+ * - /mcp requires a Bearer token (constant-time compare) before anything else.
+ * - Stateless transport: a fresh McpServer + transport per request, closed when
+ *   the response ends (no connect()-per-request leak on a shared server).
+ * - DNS-rebinding protection via allowedHosts/allowedOrigins on the transport.
+ * - CORS never uses "*"; an Origin is echoed only if explicitly allow-listed.
+ */
+export function createHttpServer(config: HttpServerConfig): Server {
+  return createServer(async (req, res) => {
+    const origin = req.headers["origin"];
+    if (typeof origin === "string" && config.allowedOrigins.includes(origin)) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Vary", "Origin");
+      res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type, Accept, Authorization, Mcp-Session-Id");
+    }
 
     if (req.method === "OPTIONS") {
       res.writeHead(204);
@@ -251,13 +300,35 @@ async function startHttpServer(server: McpServer, port: number): Promise<void> {
 
     if (req.url === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "ok", server: "yookassa-mcp", tools: 20 }));
+      res.end(JSON.stringify({ status: "ok", server: "yookassa-mcp", tools: config.toolCount }));
       return;
     }
 
     if (req.url === "/mcp") {
-      const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => crypto.randomUUID() });
-      await server.connect(transport);
+      if (req.method !== "POST") {
+        // Stateless endpoint: no GET (SSE) / DELETE (session) support.
+        res.writeHead(405, { "Content-Type": "application/json", "Allow": "POST" });
+        res.end(JSON.stringify({ error: "Method Not Allowed (stateless MCP endpoint accepts POST only)" }));
+        return;
+      }
+      if (!isAuthorized(req, config.authToken)) {
+        res.writeHead(401, { "Content-Type": "application/json", "WWW-Authenticate": "Bearer" });
+        res.end(JSON.stringify({ error: "Unauthorized" }));
+        return;
+      }
+
+      const requestServer = createMcpServer();
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+        enableDnsRebindingProtection: true,
+        allowedHosts: config.allowedHosts,
+        allowedOrigins: config.allowedOrigins,
+      });
+      res.on("close", () => {
+        transport.close();
+        requestServer.close();
+      });
+      await requestServer.connect(transport);
       await transport.handleRequest(req, res);
       return;
     }
@@ -265,16 +336,34 @@ async function startHttpServer(server: McpServer, port: number): Promise<void> {
     res.writeHead(404);
     res.end("Not Found");
   });
+}
 
-  httpServer.listen(port, () => {
-    console.error(`[yookassa-mcp] HTTP server on port ${port}`);
-    console.error(`[yookassa-mcp] MCP: http://localhost:${port}/mcp`);
-    console.error(`[yookassa-mcp] Health: http://localhost:${port}/health`);
+async function startHttpServer(port: number): Promise<void> {
+  const authToken = process.env.MCP_AUTH_TOKEN;
+  if (!authToken) {
+    throw new Error(
+      "HTTP transport requires MCP_AUTH_TOKEN — a strong shared secret sent as a Bearer token on /mcp. " +
+      "Refusing to expose money-moving tools without authentication. Set MCP_AUTH_TOKEN and retry."
+    );
+  }
+
+  const host = process.env.HTTP_HOST ?? "127.0.0.1";
+  const allowedHosts = (process.env.MCP_ALLOWED_HOSTS ?? `127.0.0.1:${port},localhost:${port}`)
+    .split(",").map((s) => s.trim()).filter(Boolean);
+  const allowedOrigins = (process.env.MCP_ALLOWED_ORIGINS ?? "")
+    .split(",").map((s) => s.trim()).filter(Boolean);
+  const toolCount = await countRegisteredTools();
+
+  const httpServer = createHttpServer({ authToken, allowedHosts, allowedOrigins, toolCount });
+
+  httpServer.listen(port, host, () => {
+    console.error(`[yookassa-mcp] HTTP server on ${host}:${port} (${toolCount} tools)`);
+    console.error(`[yookassa-mcp] MCP: http://${host}:${port}/mcp (Bearer auth required)`);
+    console.error(`[yookassa-mcp] Health: http://${host}:${port}/health`);
   });
 }
 
 async function main() {
-  const server = createMcpServer();
   const httpPort = process.argv.includes("--http")
     ? parseInt(process.env.HTTP_PORT ?? "3000", 10)
     : process.env.HTTP_PORT
@@ -282,11 +371,12 @@ async function main() {
       : null;
 
   if (httpPort) {
-    await startHttpServer(server, httpPort);
+    await startHttpServer(httpPort);
   } else {
+    const server = createMcpServer();
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error("[yookassa-mcp] Server started (stdio). 20 tools. Production-grade YooKassa MCP.");
+    console.error("[yookassa-mcp] Server started (stdio). Production-grade YooKassa MCP.");
   }
 }
 

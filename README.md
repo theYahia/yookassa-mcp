@@ -70,13 +70,20 @@ claude mcp add yookassa -e YOOKASSA_SHOP_ID=your-id -e YOOKASSA_SECRET_KEY=your-
 
 ### Streamable HTTP (remote / Docker)
 
+> ⚠️ **The HTTP transport exposes money-moving tools.** It requires a Bearer token,
+> binds to `127.0.0.1` by default, and validates `Host`/`Origin` (DNS-rebinding protection).
+> Never expose it directly to the internet — put it behind an authenticating reverse proxy / mTLS.
+> See [SECURITY.md](SECURITY.md).
+
 ```bash
-HTTP_PORT=3000 npx -y @theyahia/yookassa-mcp --http
+MCP_AUTH_TOKEN="$(openssl rand -hex 32)" HTTP_PORT=3000 npx -y @theyahia/yookassa-mcp --http
 ```
 
+Then call `/mcp` with `Authorization: Bearer <MCP_AUTH_TOKEN>`.
+
 Endpoints:
-- `POST /mcp` -- MCP Streamable HTTP transport
-- `GET /health` -- health check (`{ "status": "ok", "tools": 20 }`)
+- `POST /mcp` -- MCP Streamable HTTP transport (Bearer auth required; stateless — POST only)
+- `GET /health` -- unauthenticated health check (`{ "status": "ok", "tools": <count> }`)
 
 ## Environment Variables
 
@@ -84,7 +91,11 @@ Endpoints:
 |----------|:--------:|-------------|
 | `YOOKASSA_SHOP_ID` | Yes | Shop ID (Settings -> Shop) |
 | `YOOKASSA_SECRET_KEY` | Yes | Secret key (Integration -> API Keys) |
-| `HTTP_PORT` | No | Port for HTTP transport (default 3000) |
+| `HTTP_PORT` | No | Port for HTTP transport (default 3000); enables `--http` mode |
+| `MCP_AUTH_TOKEN` | HTTP only | **Required in HTTP mode.** Bearer token clients must send on `/mcp` |
+| `HTTP_HOST` | No | Bind address for HTTP mode (default `127.0.0.1`; set `0.0.0.0` to expose — only behind a proxy) |
+| `MCP_ALLOWED_HOSTS` | No | Comma-separated `Host` allowlist (default `127.0.0.1:<port>,localhost:<port>`) |
+| `MCP_ALLOWED_ORIGINS` | No | Comma-separated browser `Origin` CORS allowlist (default: none — browser origins rejected) |
 
 For testing, create a demo shop in [YooKassa dashboard](https://yookassa.ru/my/shop-settings).
 
