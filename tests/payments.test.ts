@@ -56,6 +56,8 @@ describe("create_payment", () => {
       currency: "RUB",
       description: "Test order",
       capture: true,
+      confirmation_type: "redirect",
+      return_url: "https://shop.example/return",
     }));
 
     expect(result.id).toBe("pay_123");
@@ -68,6 +70,31 @@ describe("create_payment", () => {
     const body = JSON.parse(opts.body);
     expect(body.amount.value).toBe("1000.00");
     expect(body.description).toBe("Test order");
+    expect(body.confirmation).toEqual({ type: "redirect", return_url: "https://shop.example/return" });
+  });
+
+  it("requires return_url for redirect confirmation (no placeholder)", async () => {
+    await expect(handleCreatePayment({
+      amount: 1000,
+      currency: "RUB",
+      description: "No return_url",
+      capture: true,
+      confirmation_type: "redirect",
+    })).rejects.toThrow("return_url");
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("omits return_url for embedded confirmation", async () => {
+    mockFetch.mockResolvedValueOnce(mockOk({ id: "pay_emb" }));
+    await handleCreatePayment({
+      amount: 1000,
+      currency: "RUB",
+      description: "Embedded",
+      capture: true,
+      confirmation_type: "embedded",
+    });
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.confirmation).toEqual({ type: "embedded" });
   });
 
   it("includes receipt when email and items provided", async () => {
@@ -78,6 +105,8 @@ describe("create_payment", () => {
       currency: "RUB",
       description: "With receipt",
       capture: true,
+      confirmation_type: "redirect",
+      return_url: "https://shop.example/return",
       receipt_email: "test@example.com",
       receipt_items: [
         { description: "Item 1", quantity: 2, amount: 250, vat_code: 4 },
@@ -99,6 +128,7 @@ describe("create_payment", () => {
       currency: "RUB",
       description: "With meta",
       capture: true,
+      confirmation_type: "embedded",
       metadata: { order_id: "abc123" },
     });
 
@@ -213,10 +243,15 @@ describe("create_sbp_payment", () => {
       amount: 1000,
       currency: "RUB",
       description: "SBP test",
+      confirmation_type: "redirect",
+      return_url: "https://shop.example/return",
     });
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.payment_method_data.type).toBe("sbp");
+    expect(body.amount.value).toBe("1000.00");
+    expect(body.capture).toBe(true);
+    expect(body.confirmation).toEqual({ type: "redirect", return_url: "https://shop.example/return" });
   });
 });
 
@@ -228,6 +263,8 @@ describe("create_split_payment", () => {
       amount: 10000,
       currency: "RUB",
       description: "Marketplace order",
+      confirmation_type: "redirect",
+      return_url: "https://shop.example/return",
       transfers: [
         { account_id: "shop_1", amount: 7000, description: "Seller" },
         { account_id: "shop_2", amount: 3000 },
@@ -235,6 +272,9 @@ describe("create_split_payment", () => {
     });
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.amount.value).toBe("10000.00");
+    expect(body.capture).toBe(true);
+    expect(body.confirmation).toEqual({ type: "redirect", return_url: "https://shop.example/return" });
     expect(body.transfers).toHaveLength(2);
     expect(body.transfers[0].account_id).toBe("shop_1");
     expect(body.transfers[0].amount.value).toBe("7000.00");

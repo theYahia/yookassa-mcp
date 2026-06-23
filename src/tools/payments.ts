@@ -8,7 +8,8 @@ export const createPaymentSchema = z.object({
   currency: z.string().default("RUB").describe("Валюта (по умолчанию RUB)"),
   description: z.string().max(128).describe("Описание платежа (макс 128 символов)"),
   capture: z.boolean().default(true).describe("true = одностадийный, false = холдирование"),
-  return_url: z.string().url().optional().describe("URL для возврата после оплаты"),
+  confirmation_type: z.enum(["redirect", "embedded", "qr"]).default("redirect").describe("Тип подтверждения оплаты: redirect (нужен return_url), embedded (виджет) или qr"),
+  return_url: z.string().url().optional().describe("URL возврата покупателя после оплаты — ОБЯЗАТЕЛЕН при confirmation_type=redirect"),
   payment_method_type: z.enum([
     "bank_card", "sbp", "yoo_money", "sberbank", "tinkoff_bank",
     "mobile_balance", "cash", "installments"
@@ -63,14 +64,16 @@ export const createSbpPaymentSchema = z.object({
   amount: moneyAmount.describe("Сумма платежа через СБП"),
   currency: z.string().default("RUB").describe("Валюта"),
   description: z.string().max(128).describe("Описание платежа"),
-  return_url: z.string().url().optional().describe("URL возврата"),
+  confirmation_type: z.enum(["redirect", "embedded", "qr"]).default("redirect").describe("Тип подтверждения: redirect (нужен return_url), embedded или qr"),
+  return_url: z.string().url().optional().describe("URL возврата — ОБЯЗАТЕЛЕН при confirmation_type=redirect"),
 });
 
 export const createSplitPaymentSchema = z.object({
   amount: moneyAmount.describe("Общая сумма платежа"),
   currency: z.string().default("RUB").describe("Валюта"),
   description: z.string().max(128).describe("Описание платежа"),
-  return_url: z.string().url().optional().describe("URL возврата"),
+  confirmation_type: z.enum(["redirect", "embedded", "qr"]).default("redirect").describe("Тип подтверждения: redirect (нужен return_url), embedded или qr"),
+  return_url: z.string().url().optional().describe("URL возврата — ОБЯЗАТЕЛЕН при confirmation_type=redirect"),
   transfers: z.array(z.object({
     account_id: z.string().describe("ID получателя (shopId партнёра)"),
     amount: moneyAmount.describe("Сумма для этого получателя"),
@@ -80,14 +83,31 @@ export const createSplitPaymentSchema = z.object({
 
 // --- Handlers ---
 
+/**
+ * Build a confirmation object. For redirect, return_url is required (no placeholder is
+ * invented — a bogus return_url would redirect the real payer to a dead page after paying).
+ * embedded/qr need no return_url.
+ */
+function buildConfirmation(type: "redirect" | "embedded" | "qr", returnUrl?: string): Record<string, unknown> {
+  // embedded/qr need no return_url; everything else (incl. the default) is redirect.
+  if (type === "embedded" || type === "qr") {
+    return { type };
+  }
+  if (!returnUrl) {
+    throw new Error(
+      "return_url обязателен при confirmation_type=redirect (URL, на который ЮKassa вернёт покупателя после оплаты). " +
+      "Передайте реальный return_url или выберите confirmation_type=embedded/qr."
+    );
+  }
+  return { type: "redirect", return_url: returnUrl };
+}
+
 export async function handleCreatePayment(params: z.infer<typeof createPaymentSchema>): Promise<string> {
   const body: Record<string, unknown> = {
     amount: formatAmount(params.amount, params.currency),
     description: params.description,
     capture: params.capture,
-    confirmation: params.return_url
-      ? { type: "redirect", return_url: params.return_url }
-      : { type: "redirect", return_url: "https://example.com/return" },
+    confirmation: buildConfirmation(params.confirmation_type, params.return_url),
   };
 
   if (params.payment_method_type) {
@@ -174,10 +194,7 @@ export async function handleCreateSbpPayment(params: z.infer<typeof createSbpPay
     description: params.description,
     capture: true,
     payment_method_data: { type: "sbp" },
-    confirmation: {
-      type: "redirect",
-      return_url: params.return_url ?? "https://example.com/return",
-    },
+    confirmation: buildConfirmation(params.confirmation_type, params.return_url),
   };
 
   const result = await getClient().post("/payments", body);
@@ -189,10 +206,7 @@ export async function handleCreateSplitPayment(params: z.infer<typeof createSpli
     amount: formatAmount(params.amount, params.currency),
     description: params.description,
     capture: true,
-    confirmation: {
-      type: "redirect",
-      return_url: params.return_url ?? "https://example.com/return",
-    },
+    confirmation: buildConfirmation(params.confirmation_type, params.return_url),
     transfers: params.transfers.map(t => ({
       account_id: t.account_id,
       amount: formatAmount(t.amount, params.currency),

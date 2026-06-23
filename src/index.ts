@@ -209,11 +209,19 @@ export function createMcpServer(): McpServer {
 
   server.registerTool("create_payout", {
     title: "Create payout",
-    description: "Create a payout to a bank card, YooMoney wallet, or SBP. Requires the separately-activated YooKassa Payouts product with its own credentials (see README/SECURITY). MOVES REAL MONEY — irreversible.",
+    description: "Create a payout to a bank card, YooMoney wallet, or SBP. Requires the separately-activated YooKassa Payouts product with its own credentials (see README/SECURITY). Asynchronous — the response may be 'pending'; poll get_payout for the final status. MOVES REAL MONEY — irreversible.",
     inputSchema: createPayoutSchema.shape,
     outputSchema: objectResultSchema,
     annotations: writeMoney(),
-  }, async (params) => objectResult(await handleCreatePayout(params)));
+  }, async (params) => {
+    const text = await handleCreatePayout(params);
+    const content: { type: "text"; text: string }[] = [{ type: "text", text }];
+    const structuredContent = toStructured(text);
+    if (structuredContent.status === "pending") {
+      content.push({ type: "text", text: "Note: this payout is pending (asynchronous). Poll get_payout(payout_id) or await a webhook for the final status before treating it as complete." });
+    }
+    return { content, structuredContent };
+  });
 
   server.registerTool("get_payout", {
     title: "Get payout",
