@@ -1,6 +1,6 @@
-# @theyahia/yookassa-mcp
+# ЮKassa MCP — приём платежей и чеки 54-ФЗ из Claude и других AI-агентов
 
-MCP server for YooKassa API -- payments, refunds, receipts (54-FZ), payouts, webhooks, recurring, SBP, marketplace splits. **20 tools.**
+Если вы искали, как подключить ЮKassa к нейросети, проводить платежи и возвраты прямо в диалоге или автоматизировать фискальные чеки по 54-ФЗ без написания кода — это оно. 20 инструментов закрывают весь оборот денег: платежи, возвраты, чеки, выплаты, вебхуки, рекуррентные списания, СБП и сплиты маркетплейса. Ставится в Claude Desktop, Cursor или любой MCP-клиент одной строкой конфига.
 
 [![npm](https://img.shields.io/npm/v/@theyahia/yookassa-mcp)](https://www.npmjs.com/package/@theyahia/yookassa-mcp)
 [![CI](https://github.com/theYahia/yookassa-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/theYahia/yookassa-mcp/actions/workflows/ci.yml)
@@ -211,3 +211,4 @@ MIT
 ---
 
 Часть [WWmcp](https://github.com/theYahia/WWmcp) · Telegram: [@vhodvai](https://t.me/vhodvai)
+
